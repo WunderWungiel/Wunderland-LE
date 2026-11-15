@@ -7,19 +7,57 @@
 namespace
     {
     const TInt KLabelGranularity = 4;
-    const TInt KTabHPad   = 8;   // text padding inside a tab
-    const TInt KTabGap    = 3;   // space between tabs
-    const TInt KTabVInset = 3;   // tab inset from the bar's top/bottom edge
-    const TInt KTabVPad   = 4;   // text padding above/below inside a tab
+    const TInt KTabHPad   = 10;  // text padding inside a tab
+    const TInt KTabGap    = 2;   // space between tabs
+    const TInt KTabVInset = 3;   // frame inset from the bar's top/bottom edge
+    const TInt KTabVPad   = 3;   // text padding above/below inside the frame
 
     // TRgb(TUint32) is 0x00BBGGRR, so always use the (r, g, b) form.
-    const TRgb KBarColor()        { return TRgb(0x28, 0x78, 0xC2); }   // #2878C2
-    const TRgb KBarShadeColor()   { return TRgb(0x1E, 0x64, 0xA6); }   // bottom edge
-    const TRgb KTabColor()        { return TRgb(0x4A, 0x90, 0xD2); }   // unselected tab
-    const TRgb KSelTabColor()     { return TRgb(0x14, 0x4E, 0x86); }   // selected tab
-    const TRgb KTabTextColor()    { return TRgb(0xE4, 0xEF, 0xFA); }
-    const TRgb KArrowColor()      { return KRgbWhite; }
-    const TRgb KArrowDimColor()   { return TRgb(0x6E, 0xA4, 0xD8); }
+    // Bar: glossy two-segment vertical gradient around #2878C2.
+    const TRgb KBarTopColor()      { return TRgb(0x6C, 0xAC, 0xE6); }
+    const TRgb KBarMidHiColor()    { return TRgb(0x44, 0x8E, 0xD2); }   // end of the gloss
+    const TRgb KBarMidLoColor()    { return TRgb(0x28, 0x78, 0xC2); }   // #2878C2
+    const TRgb KBarBottomColor()   { return TRgb(0x1E, 0x66, 0xAA); }
+    const TRgb KBarHighlightColor(){ return TRgb(0xA4, 0xCE, 0xF4); }   // top edge
+    const TRgb KBarShadeColor()    { return TRgb(0x10, 0x46, 0x7C); }   // bottom edge
+    // Every tab sits in a square frame with a faint whitish border; the
+    // selected one has a dark gradient fill and a brighter border.
+    const TRgb KSelTopColor()      { return TRgb(0x1C, 0x5E, 0x9E); }
+    const TRgb KSelBottomColor()   { return TRgb(0x0A, 0x34, 0x62); }
+    const TRgb KSelTextColor()     { return KRgbWhite; }
+    const TRgb KSelBorderColor()   { return TRgb(0xC8, 0xE0, 0xF6); }
+    const TRgb KTabBorderColor()   { return TRgb(0x8E, 0xBE, 0xEA); }
+    const TRgb KTabTextColor()     { return TRgb(0x08, 0x24, 0x44); }   // unselected: dark on bar
+    const TRgb KArrowColor()       { return KRgbWhite; }
+    const TRgb KArrowDimColor()    { return TRgb(0x8C, 0xBC, 0xE8); }
+    const TRgb KArrowShadowColor() { return TRgb(0x10, 0x46, 0x7C); }
+
+    // Linear blend: aNum/aDen of the way from aFrom to aTo.
+    TRgb Blend(const TRgb& aFrom, const TRgb& aTo, TInt aNum, TInt aDen)
+        {
+        if (aDen <= 0)
+            {
+            return aFrom;
+            }
+        return TRgb(aFrom.Red()   + (aTo.Red()   - aFrom.Red())   * aNum / aDen,
+                    aFrom.Green() + (aTo.Green() - aFrom.Green()) * aNum / aDen,
+                    aFrom.Blue()  + (aTo.Blue()  - aFrom.Blue())  * aNum / aDen);
+        }
+
+    // Fills aRect row by row with a vertical gradient.
+    void FillGradient(CWindowGc& aGc, const TRect& aRect, const TRgb& aTop, const TRgb& aBottom)
+        {
+        const TInt h = aRect.Height();
+        aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
+        aGc.SetPenStyle(CGraphicsContext::ESolidPen);
+        aGc.SetPenSize(TSize(1, 1));
+        for (TInt row = 0; row < h; ++row)
+            {
+            const TInt y = aRect.iTl.iY + row;
+            aGc.SetPenColor(Blend(aTop, aBottom, row, h > 1 ? h - 1 : 1));
+            aGc.DrawLine(TPoint(aRect.iTl.iX, y), TPoint(aRect.iBr.iX, y));   // end point excluded
+            }
+        }
     }
 
 CWunderlandTabBar* CWunderlandTabBar::NewL(const CCoeControl& aParent)
@@ -102,7 +140,7 @@ void CWunderlandTabBar::MoveSelectionL(TInt aDelta)
 
 const CFont* CWunderlandTabBar::Font() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontSecondaryFont);
+    return AknLayoutUtils::FontFromId(EAknLogicalFontPrimarySmallFont);   // small bold, like Ovi Store
     }
 
 TInt CWunderlandTabBar::PreferredHeight() const
@@ -271,10 +309,22 @@ void CWunderlandTabBar::DrawArrow(CWindowGc& aGc, const TRect& aRect, TBool aLef
         pts[1] = TPoint(c.iX - w / 2, c.iY - h);
         pts[2] = TPoint(c.iX - w / 2, c.iY + h);
         }
-    const TRgb colour = aEnabled ? KArrowColor() : KArrowDimColor();
     aGc.SetPenStyle(CGraphicsContext::ESolidPen);
-    aGc.SetPenColor(colour);
     aGc.SetBrushStyle(CGraphicsContext::ESolidBrush);
+    if (aEnabled)
+        {
+        // 1 px drop shadow so the white arrow stands out on the light gloss
+        TPoint shadow[3];
+        for (TInt i = 0; i < 3; ++i)
+            {
+            shadow[i] = pts[i] + TPoint(0, 1);
+            }
+        aGc.SetPenColor(KArrowShadowColor());
+        aGc.SetBrushColor(KArrowShadowColor());
+        aGc.DrawPolygon(shadow, 3);
+        }
+    const TRgb colour = aEnabled ? KArrowColor() : KArrowDimColor();
+    aGc.SetPenColor(colour);
     aGc.SetBrushColor(colour);
     aGc.DrawPolygon(pts, 3);
     }
@@ -284,12 +334,12 @@ void CWunderlandTabBar::Draw(const TRect& /*aRect*/) const
     CWindowGc& gc = SystemGc();
     const TRect rect(Rect());
 
-    // Background
-    gc.SetPenStyle(CGraphicsContext::ENullPen);
-    gc.SetBrushStyle(CGraphicsContext::ESolidBrush);
-    gc.SetBrushColor(KBarColor());
-    gc.DrawRect(rect);
-    gc.SetPenStyle(CGraphicsContext::ESolidPen);
+    // Background: glossy gradient, light upper half, base colour lower half
+    const TInt split = rect.iTl.iY + rect.Height() / 2;
+    FillGradient(gc, TRect(rect.iTl, TPoint(rect.iBr.iX, split)), KBarTopColor(), KBarMidHiColor());
+    FillGradient(gc, TRect(TPoint(rect.iTl.iX, split), rect.iBr), KBarMidLoColor(), KBarBottomColor());
+    gc.SetPenColor(KBarHighlightColor());
+    gc.DrawLine(rect.iTl, TPoint(rect.iBr.iX, rect.iTl.iY));
     gc.SetPenColor(KBarShadeColor());
     gc.DrawLine(TPoint(rect.iTl.iX, rect.iBr.iY - 1), TPoint(rect.iBr.iX, rect.iBr.iY - 1));
 
@@ -302,12 +352,12 @@ void CWunderlandTabBar::Draw(const TRect& /*aRect*/) const
         return;
         }
 
-    // Tabs, clipped to the area between the arrows
+    // Tabs, clipped to the area between the arrows. Each tab is a square
+    // frame; the selected one is filled dark with white text.
     const TRect view(Viewport());
     gc.SetClippingRect(view);
     const CFont* font = Font();
     gc.UseFont(font);
-    const TSize corner(3, 3);
     for (TInt i = 0; i < count; ++i)
         {
         const TRect tab(TabRect(i));
@@ -316,14 +366,16 @@ void CWunderlandTabBar::Draw(const TRect& /*aRect*/) const
             continue;   // fully scrolled out
             }
         const TBool selected = (i == iSelected);
-        gc.SetPenStyle(CGraphicsContext::ENullPen);
-        gc.SetBrushStyle(CGraphicsContext::ESolidBrush);
-        gc.SetBrushColor(selected ? KSelTabColor() : KTabColor());
-        gc.DrawRoundRect(tab, corner);
+        if (selected)
+            {
+            FillGradient(gc, tab, KSelTopColor(), KSelBottomColor());
+            }
 
-        gc.SetBrushStyle(CGraphicsContext::ENullBrush);   // DrawText(box) must not clear the tab
+        gc.SetBrushStyle(CGraphicsContext::ENullBrush);   // outline only; DrawText(box) must not clear
         gc.SetPenStyle(CGraphicsContext::ESolidPen);
-        gc.SetPenColor(selected ? KRgbWhite : KTabTextColor());
+        gc.SetPenColor(selected ? KSelBorderColor() : KTabBorderColor());
+        gc.DrawRect(tab);
+        gc.SetPenColor(selected ? KSelTextColor() : KTabTextColor());
         const TInt baseline = (tab.Height() + font->AscentInPixels() - font->DescentInPixels()) / 2;
         gc.DrawText(iLabels->MdcaPoint(i), tab, baseline, CGraphicsContext::ECenter);
         }
