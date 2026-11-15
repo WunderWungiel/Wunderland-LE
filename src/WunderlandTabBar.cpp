@@ -2,7 +2,10 @@
 #include <avkon.hrh>
 #include <gdi.h>
 #include <w32std.h>
+#include "WunderlandDrawUtils.h"
 #include "WunderlandTabBar.h"
+
+using WunderlandDraw::FillGradient;
 
 namespace
     {
@@ -12,7 +15,6 @@ namespace
     const TInt KTabVInset = 3;   // frame inset from the bar's top/bottom edge
     const TInt KTabVPad   = 3;   // text padding above/below inside the frame
 
-    // TRgb(TUint32) is 0x00BBGGRR, so always use the (r, g, b) form.
     // Bar: glossy two-segment vertical gradient around #2878C2.
     const TRgb KBarTopColor()      { return TRgb(0x6C, 0xAC, 0xE6); }
     const TRgb KBarMidHiColor()    { return TRgb(0x44, 0x8E, 0xD2); }   // end of the gloss
@@ -31,33 +33,6 @@ namespace
     const TRgb KArrowColor()       { return KRgbWhite; }
     const TRgb KArrowDimColor()    { return TRgb(0x8C, 0xBC, 0xE8); }
     const TRgb KArrowShadowColor() { return TRgb(0x10, 0x46, 0x7C); }
-
-    // Linear blend: aNum/aDen of the way from aFrom to aTo.
-    TRgb Blend(const TRgb& aFrom, const TRgb& aTo, TInt aNum, TInt aDen)
-        {
-        if (aDen <= 0)
-            {
-            return aFrom;
-            }
-        return TRgb(aFrom.Red()   + (aTo.Red()   - aFrom.Red())   * aNum / aDen,
-                    aFrom.Green() + (aTo.Green() - aFrom.Green()) * aNum / aDen,
-                    aFrom.Blue()  + (aTo.Blue()  - aFrom.Blue())  * aNum / aDen);
-        }
-
-    // Fills aRect row by row with a vertical gradient.
-    void FillGradient(CWindowGc& aGc, const TRect& aRect, const TRgb& aTop, const TRgb& aBottom)
-        {
-        const TInt h = aRect.Height();
-        aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
-        aGc.SetPenStyle(CGraphicsContext::ESolidPen);
-        aGc.SetPenSize(TSize(1, 1));
-        for (TInt row = 0; row < h; ++row)
-            {
-            const TInt y = aRect.iTl.iY + row;
-            aGc.SetPenColor(Blend(aTop, aBottom, row, h > 1 ? h - 1 : 1));
-            aGc.DrawLine(TPoint(aRect.iTl.iX, y), TPoint(aRect.iBr.iX, y));   // end point excluded
-            }
-        }
     }
 
 CWunderlandTabBar* CWunderlandTabBar::NewL(const CCoeControl& aParent)
@@ -309,24 +284,9 @@ void CWunderlandTabBar::DrawArrow(CWindowGc& aGc, const TRect& aRect, TBool aLef
         pts[1] = TPoint(c.iX - w / 2, c.iY - h);
         pts[2] = TPoint(c.iX - w / 2, c.iY + h);
         }
-    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
-    aGc.SetBrushStyle(CGraphicsContext::ESolidBrush);
-    if (aEnabled)
-        {
-        // 1 px drop shadow so the white arrow stands out on the light gloss
-        TPoint shadow[3];
-        for (TInt i = 0; i < 3; ++i)
-            {
-            shadow[i] = pts[i] + TPoint(0, 1);
-            }
-        aGc.SetPenColor(KArrowShadowColor());
-        aGc.SetBrushColor(KArrowShadowColor());
-        aGc.DrawPolygon(shadow, 3);
-        }
-    const TRgb colour = aEnabled ? KArrowColor() : KArrowDimColor();
-    aGc.SetPenColor(colour);
-    aGc.SetBrushColor(colour);
-    aGc.DrawPolygon(pts, 3);
+    // 1 px drop shadow so the white arrow stands out on the light gloss
+    WunderlandDraw::FillTriangle(aGc, pts, aEnabled ? KArrowColor() : KArrowDimColor(),
+                                 aEnabled ? KArrowShadowColor() : KArrowDimColor());
     }
 
 void CWunderlandTabBar::Draw(const TRect& /*aRect*/) const

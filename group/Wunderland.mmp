@@ -18,6 +18,9 @@ SOURCE            WunderlandDocument.cpp
 SOURCE            WunderlandAppUi.cpp
 SOURCE            WunderlandContainer.cpp
 SOURCE            WunderlandTabBar.cpp
+SOURCE            WunderlandCategoryBar.cpp
+SOURCE            WunderlandDropdown.cpp
+SOURCE            WunderlandDrawUtils.cpp
 
 SOURCEPATH        ..\data
 START RESOURCE    WunderlandLE_0xE4F76EAD.rss      // main resource: must come before _reg.rss
