@@ -8,6 +8,7 @@ UID3 0xE4F76EAD
 RESOURCE APP_REGISTRATION_INFO
     {
     app_file = "WunderlandLE_0xE4F76EAD";
-    localisable_resource_file = "\resource\apps\WunderlandLE_0xE4F76EAD";
+    // Backslashes must be doubled in rcomp strings: "\r" would become a carriage return.
+    localisable_resource_file = "\\resource\\apps\\WunderlandLE_0xE4F76EAD";
     localisable_resource_id   = R_WUNDERLAND_LOCALISABLE_APP_INFO;
     }

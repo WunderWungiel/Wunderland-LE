@@ -36,6 +36,7 @@ RESOURCE LOCALISABLE_APP_INFO r_wunderland_localisable_app_info
         {
         caption         = "WunderlandLE";
         number_of_icons = 1;
-        icon_file       = "\resource\apps\WunderlandLE_0xE4F76EAD.mif";
+        // Backslashes must be doubled in rcomp strings: "\r" would become a carriage return.
+        icon_file       = "\\resource\\apps\\WunderlandLE_0xE4F76EAD.mif";
         };
     }
