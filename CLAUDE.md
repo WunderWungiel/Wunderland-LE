@@ -21,5 +21,15 @@ From an SDK command prompt (`EPOCROOT` set, project on the same drive as the SDK
 
 Qt SDK env for the compile check: `call C:\QtSDK\Symbian\SDKs\Symbian3Qt474\env.bat`
 
+**After every code/resource/build change, rebuild the release SIS** with the 9.1 SDK and report the
+result (errors/warnings from our files; SDK-header warnings are noise). Environment from a plain shell:
+```bat
+set EPOCROOT=\Symbian\9.1\S60_3rd\
+set PATH=C:\Perl\bin;C:\Program Files (x86)\Common Files\Symbian\Tools;C:\Symbian\9.1\S60_3rd\epoc32\tools;C:\Program Files (x86)\CSL Arm Toolchain\bin;%PATH%
+build.bat
+```
+Call `build.bat` by its full path from `cmd /c`. A `build.bat sbs` run overwrites `sis\WunderlandLE.sis`
+with a non-shippable binary, so always finish with the 9.1 build.
+
 ## Git
 Don't commit until the user confirms a change builds and runs on a device.

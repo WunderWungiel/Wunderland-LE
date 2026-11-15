@@ -1,4 +1,5 @@
 #include <avkon.hrh>
+#include <eikspane.h>
 #include "WunderlandAppUi.h"
 #include "WunderlandContainer.h"
 #include "Wunderland.hrh"
@@ -6,6 +7,13 @@
 void CWunderlandAppUi::ConstructL()
     {
     BaseConstructL(EAknEnableSkin);
+    // Full screen except the softkeys (like Ovi Store): hide the status pane
+    // before creating the container so ClientRect() already excludes it.
+    CEikStatusPane* statusPane = StatusPane();
+    if (statusPane)
+        {
+        statusPane->MakeVisible(EFalse);
+        }
     iContainer = CWunderlandContainer::NewL(ClientRect());
     AddToStackL(iContainer);   // receive key events
     }
