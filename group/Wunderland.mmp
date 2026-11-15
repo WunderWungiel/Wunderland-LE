@@ -20,6 +20,7 @@ SOURCE            WunderlandContainer.cpp
 SOURCE            WunderlandTabBar.cpp
 SOURCE            WunderlandCategoryBar.cpp
 SOURCE            WunderlandDropdown.cpp
+SOURCE            WunderlandAppList.cpp
 SOURCE            WunderlandDrawUtils.cpp
 
 SOURCEPATH        ..\data
@@ -27,6 +28,13 @@ START RESOURCE    WunderlandLE_0xE4F76EAD.rss      // main resource: must come b
 HEADER
 TARGETPATH        \resource\apps
 END
+START BITMAP      WunderlandLE_0xE4F76EAD_stars.mbm   // rating stars from the web store
+HEADER
+TARGETPATH        \resource\apps
+SOURCEPATH        ..\gfx
+SOURCE            c24,8 star_p.bmp star_p_mask.bmp star_g.bmp star_g_mask.bmp
+END
+SOURCEPATH        ..\data
 START RESOURCE    WunderlandLE_0xE4F76EAD_reg.rss
 TARGETPATH        \private\10003a3f\apps
 END
@@ -39,4 +47,4 @@ SYSTEMINCLUDE     \epoc32\include\mw \epoc32\include\platform\mw
 SYSTEMINCLUDE     \epoc32\include\platform \epoc32\include\app \epoc32\include\platform\app
 
 LIBRARY           euser.lib apparc.lib cone.lib eikcore.lib avkon.lib
-LIBRARY           eikcoctl.lib gdi.lib ws32.lib bafl.lib
+LIBRARY           eikcoctl.lib gdi.lib ws32.lib bafl.lib fbscli.lib

@@ -15,4 +15,5 @@
 "$(EPOCROOT)Epoc32\release\$(PLATFORM)\$(TARGET)\WunderlandLE_0xE4F76EAD.exe"   - "!:\sys\bin\WunderlandLE_0xE4F76EAD.exe"
 "$(EPOCROOT)Epoc32\data\z\resource\apps\WunderlandLE_0xE4F76EAD.rsc"             - "!:\resource\apps\WunderlandLE_0xE4F76EAD.rsc"
 "$(EPOCROOT)Epoc32\data\z\resource\apps\WunderlandLE_0xE4F76EAD.mif"             - "!:\resource\apps\WunderlandLE_0xE4F76EAD.mif"
+"$(EPOCROOT)Epoc32\data\z\resource\apps\WunderlandLE_0xE4F76EAD_stars.mbm"       - "!:\resource\apps\WunderlandLE_0xE4F76EAD_stars.mbm"
 "$(EPOCROOT)Epoc32\data\z\private\10003a3f\apps\WunderlandLE_0xE4F76EAD_reg.rsc" - "!:\private\10003a3f\import\apps\WunderlandLE_0xE4F76EAD_reg.rsc"
