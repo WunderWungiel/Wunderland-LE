@@ -1,0 +1,38 @@
+// Wunderland.mmp - Wunderland Store native client (S60 3rd/5th Edition GUI app)
+// UID3 0xE4F76EAD is in the unprotected test range (OK for unsigned packages).
+// It must match: _reg.rss, KUidWunderlandApp, the PKG header and any \private\ paths.
+
+TARGET            WunderlandLE_0xE4F76EAD.exe
+TARGETTYPE        exe
+UID               0x100039CE 0xE4F76EAD
+SECUREID          0xE4F76EAD
+VENDORID          0
+CAPABILITY        NONE               // add NetworkServices once we talk to the store
+EPOCSTACKSIZE     0x5000             // GUI apps need >= 20 KB
+EPOCHEAPSIZE      0x10000 0x400000   // 64 KB min, 4 MB max
+
+SOURCEPATH        ..\src
+SOURCE            Wunderland.cpp
+SOURCE            WunderlandApplication.cpp
+SOURCE            WunderlandDocument.cpp
+SOURCE            WunderlandAppUi.cpp
+SOURCE            WunderlandContainer.cpp
+
+SOURCEPATH        ..\data
+START RESOURCE    WunderlandLE_0xE4F76EAD.rss      // main resource: must come before _reg.rss
+HEADER
+TARGETPATH        \resource\apps
+END
+START RESOURCE    WunderlandLE_0xE4F76EAD_reg.rss
+TARGETPATH        \private\10003a3f\apps
+END
+
+USERINCLUDE       ..\inc
+SYSTEMINCLUDE     \epoc32\include
+// S60 3rd/5th SDKs keep everything in \epoc32\include. Symbian^3+ SDKs split headers
+// into subfolders; listing them is harmless on older SDKs where they don't exist.
+SYSTEMINCLUDE     \epoc32\include\mw \epoc32\include\platform\mw
+SYSTEMINCLUDE     \epoc32\include\platform \epoc32\include\app \epoc32\include\platform\app
+
+LIBRARY           euser.lib apparc.lib cone.lib eikcore.lib avkon.lib
+LIBRARY           eikcoctl.lib gdi.lib ws32.lib

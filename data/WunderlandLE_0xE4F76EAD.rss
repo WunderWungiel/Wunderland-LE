@@ -1,0 +1,41 @@
+// WunderlandLE_0xE4F76EAD.rss - main resource file
+NAME WUND
+
+#include <eikon.rh>
+#include <avkon.rh>
+#include <avkon.rsg>
+#include <appinfo.rh>
+#include "Wunderland.hrh"
+
+RESOURCE RSS_SIGNATURE { }
+RESOURCE TBUF { buf = "Wunderland"; }
+
+RESOURCE EIK_APP_INFO
+    {
+    menubar = r_wunderland_menubar;
+    cba     = R_AVKON_SOFTKEYS_OPTIONS_EXIT;
+    }
+
+RESOURCE MENU_BAR r_wunderland_menubar
+    {
+    titles = { MENU_TITLE { menu_pane = r_wunderland_menu; } };
+    }
+
+RESOURCE MENU_PANE r_wunderland_menu
+    {
+    items =
+        {
+        MENU_ITEM { command = EAknCmdExit; txt = "Exit"; }
+        };
+    }
+
+RESOURCE LOCALISABLE_APP_INFO r_wunderland_localisable_app_info
+    {
+    short_caption = "WunderlandLE";
+    caption_and_icon = CAPTION_AND_ICON_INFO
+        {
+        caption         = "WunderlandLE";
+        number_of_icons = 1;
+        icon_file       = "\resource\apps\WunderlandLE_0xE4F76EAD.mif";
+        };
+    }

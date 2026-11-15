@@ -1,0 +1,13 @@
+// WunderlandLE_0xE4F76EAD_reg.rss - registration file: puts the app into the menu
+#include <appinfo.rh>
+#include <WunderlandLE_0xE4F76EAD.rsg>
+
+UID2 KUidAppRegistrationResourceFile
+UID3 0xE4F76EAD
+
+RESOURCE APP_REGISTRATION_INFO
+    {
+    app_file = "WunderlandLE_0xE4F76EAD";
+    localisable_resource_file = "\resource\apps\WunderlandLE_0xE4F76EAD";
+    localisable_resource_id   = R_WUNDERLAND_LOCALISABLE_APP_INFO;
+    }

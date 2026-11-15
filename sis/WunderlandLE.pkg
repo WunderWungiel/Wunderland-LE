@@ -1,0 +1,18 @@
+; WunderlandLE.pkg - Wunderland Store native client
+; Paths use Carbide.c++ variables $(EPOCROOT), $(PLATFORM), $(TARGET).
+; build.bat substitutes them for command-line builds (e.g. \Symbian\9.1\S60_3rd_MR\, gcce, urel).
+&EN
+#{"WunderlandLE"}, (0xE4F76EAD), 0, 1, 0, TYPE=SA
+%{"WunderWungiel"}
+:"WunderWungiel"
+
+; Supported platforms: S60 3rd Ed. (9.1), FP1 (9.2), FP2 (9.3), 5th Ed. (9.4)
+[0x101F7961], 0, 0, 0, {"S60ProductID"}
+[0x102032BE], 0, 0, 0, {"S60ProductID"}
+[0x102752AE], 0, 0, 0, {"S60ProductID"}
+[0x1028315F], 0, 0, 0, {"S60ProductID"}
+
+"$(EPOCROOT)Epoc32\release\$(PLATFORM)\$(TARGET)\WunderlandLE_0xE4F76EAD.exe"   - "!:\sys\bin\WunderlandLE_0xE4F76EAD.exe"
+"$(EPOCROOT)Epoc32\data\z\resource\apps\WunderlandLE_0xE4F76EAD.rsc"             - "!:\resource\apps\WunderlandLE_0xE4F76EAD.rsc"
+"$(EPOCROOT)Epoc32\data\z\resource\apps\WunderlandLE_0xE4F76EAD.mif"             - "!:\resource\apps\WunderlandLE_0xE4F76EAD.mif"
+"$(EPOCROOT)Epoc32\data\z\private\10003a3f\apps\WunderlandLE_0xE4F76EAD_reg.rsc" - "!:\private\10003a3f\import\apps\WunderlandLE_0xE4F76EAD_reg.rsc"

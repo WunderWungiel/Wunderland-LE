@@ -1,0 +1,9 @@
+// bld.inf - WunderlandLE (Wunderland Store native client)
+// Targets: S60 3rd Edition (9.1, 9.2, 9.3) and S60 5th Edition (9.4)
+
+PRJ_PLATFORMS
+DEFAULT
+
+PRJ_MMPFILES
+gnumakefile Wunderland_icons.mk   // builds the MIF icon; must come before the MMP
+Wunderland.mmp

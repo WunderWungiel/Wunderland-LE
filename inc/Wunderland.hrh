@@ -1,0 +1,10 @@
+#ifndef __WUNDERLAND_HRH__
+#define __WUNDERLAND_HRH__
+
+// Command IDs shared by C++ and resources
+enum TWunderlandCommands
+    {
+    EWunderlandCmdFirst = 0x6001   // placeholder; real commands come later
+    };
+
+#endif // __WUNDERLAND_HRH__

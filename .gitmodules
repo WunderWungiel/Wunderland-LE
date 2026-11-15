@@ -1,0 +1,3 @@
+[submodule "docs/symbian-cpp-docs"]
+	path = docs/symbian-cpp-docs
+	url = https://github.com/WunderWungiel/symbian-cpp-docs

@@ -1,0 +1,12 @@
+# Build outputs / generated files
+group/abld.bat
+group/ABLD.BAT
+*.sis
+*.sisx
+sis/*_resolved.pkg
+# Signing material (never commit keys)
+sis/cert/
+*.key
+# IDE
+.metadata/
+*.launch
