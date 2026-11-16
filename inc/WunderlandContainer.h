@@ -8,11 +8,12 @@ class CWunderlandTabBar;
 class CWunderlandTooltip;
 class CWunderlandAppList;
 class CWunderlandCategoryList;
+class CWunderlandSearchPage;
 class MWunderlandPage;
 
 // Main view: icon tab bar (Home / Categories / Search) on top, the page of
-// the active tab below it: the content types on Categories, the list of
-// entries (sample data for now) on the others. While the tab bar has the d-pad
+// the active tab below it: the list of entries (sample data for now) on Home,
+// the content types on Categories, a blank page on Search (for now). While the tab bar has the d-pad
 // focus, a tooltip under the focused tab shows its name.
 class CWunderlandContainer : public CCoeControl, public MCoeControlObserver
     {
@@ -60,6 +61,7 @@ private:
     CWunderlandTabBar* iTabBar;      // owned
     CWunderlandAppList* iAppList;    // owned
     CWunderlandCategoryList* iCategoryList;   // owned
+    CWunderlandSearchPage* iSearchPage;       // owned
     CWunderlandTooltip* iTooltip;    // owned
     RArray<TApp> iApps;
     CDesCArrayFlat* iCategories;     // owned

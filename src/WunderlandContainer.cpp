@@ -6,6 +6,7 @@
 #include "WunderlandAppList.h"
 #include "WunderlandCategoryList.h"
 #include "WunderlandContainer.h"
+#include "WunderlandSearchPage.h"
 #include "WunderlandTabBar.h"
 #include "WunderlandTooltip.h"
 
@@ -46,6 +47,8 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iAppList->SetObserver(this);
     iCategoryList = CWunderlandCategoryList::NewL(*this);
     iCategoryList->SetObserver(this);
+    iSearchPage = CWunderlandSearchPage::NewL(*this);
+    iSearchPage->SetObserver(this);
     iTooltip = CWunderlandTooltip::NewL(*this);
     iTooltip->MakeVisible(EFalse);
     iCategories = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
@@ -64,6 +67,7 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     // now; a page that isn't activated ignores its own DrawDeferred() calls.
     iAppList->ActivateL();
     iCategoryList->ActivateL();
+    iSearchPage->ActivateL();
     }
 
 CWunderlandContainer::~CWunderlandContainer()
@@ -71,6 +75,7 @@ CWunderlandContainer::~CWunderlandContainer()
     iApps.Close();
     delete iCategories;
     delete iTooltip;
+    delete iSearchPage;
     delete iCategoryList;
     delete iAppList;
     delete iTabBar;
@@ -181,8 +186,7 @@ void CWunderlandContainer::AddSampleAppsL()
     #undef WUNDERLAND_COUNT
     }
 
-// Every entry, with its category under the name. The Search page doesn't
-// exist yet, so it shows the same list as Home.
+// Every entry, with its category under the name (the Home page).
 void CWunderlandContainer::UpdateAppListL()
     {
     iAppList->Reset();
@@ -214,36 +218,49 @@ void CWunderlandContainer::AddContentTypesL()
 
 MWunderlandPage& CWunderlandContainer::Page() const
     {
-    if (iTabBar->Active() == CWunderlandTabBar::ETabCategories)
+    switch (iTabBar->Active())
         {
-        return *iCategoryList;
+        case CWunderlandTabBar::ETabCategories:
+            return *iCategoryList;
+        case CWunderlandTabBar::ETabSearch:
+            return *iSearchPage;
+        default:
+            return *iAppList;
         }
-    return *iAppList;   // Home and Search until they get their own pages
     }
 
 CCoeControl* CWunderlandContainer::PageControl() const
     {
-    if (iTabBar->Active() == CWunderlandTabBar::ETabCategories)
+    switch (iTabBar->Active())
         {
-        return iCategoryList;
+        case CWunderlandTabBar::ETabCategories:
+            return iCategoryList;
+        case CWunderlandTabBar::ETabSearch:
+            return iSearchPage;
+        default:
+            return iAppList;
         }
-    return iAppList;
     }
 
 // Only the active page is a component control, so only it is drawn and
-// gets pointer events. The other one drops its highlight.
+// gets pointer events. The others drop their highlight.
 void CWunderlandContainer::UpdatePage()
     {
-    const TBool categories = (iTabBar->Active() == CWunderlandTabBar::ETabCategories);
-    iAppList->MakeVisible(!categories);
-    iCategoryList->MakeVisible(categories);
-    if (categories)
+    const TInt active = iTabBar->Active();
+    iAppList->MakeVisible(active == CWunderlandTabBar::ETabHome);
+    iCategoryList->MakeVisible(active == CWunderlandTabBar::ETabCategories);
+    iSearchPage->MakeVisible(active == CWunderlandTabBar::ETabSearch);
+    if (active != CWunderlandTabBar::ETabHome)
         {
         iAppList->SetHighlighted(-1);
         }
-    else
+    if (active != CWunderlandTabBar::ETabCategories)
         {
         iCategoryList->SetHighlighted(-1);
+        }
+    if (active != CWunderlandTabBar::ETabSearch)
+        {
+        iSearchPage->SetHighlighted(-1);
         }
     DrawDeferred();
     }
@@ -305,6 +322,7 @@ void CWunderlandContainer::SizeChanged()
     iTabBar->SetRect(TRect(rect.iTl, TSize(rect.Width(), iTabBar->PreferredHeight(rect.Size()))));
     iAppList->SetRect(ContentRect());
     iCategoryList->SetRect(ContentRect());
+    iSearchPage->SetRect(ContentRect());
     TRAP_IGNORE(UpdateTooltipL());   // only leaves on OOM; the old tooltip stays
     }
 
@@ -357,7 +375,7 @@ void CWunderlandContainer::HandleControlEventL(CCoeControl* aControl, TCoeEvent 
             }
         UpdateTooltipL();
         }
-    else if (aControl == iAppList || aControl == iCategoryList)
+    else if (aControl == iAppList || aControl == iCategoryList || aControl == iSearchPage)
         {
         // A tapped row takes the focus
         iTabBar->SetBarFocused(EFalse);
@@ -393,7 +411,7 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
         return iTabBar->OfferKeyEventL(aKeyEvent, aType);   // left/right/select
         }
     // In the page content, left/right switch tabs (S60 tab convention). Controls
-    // that need these keys themselves (the Search editor, an open category
+    // that need these keys themselves (a future Search editor, an open category
     // drop-down) must be offered the key before this point and get to keep it.
     switch (aKeyEvent.iCode)
         {
