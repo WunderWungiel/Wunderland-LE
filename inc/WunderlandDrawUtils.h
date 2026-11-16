@@ -14,6 +14,10 @@ namespace WunderlandDraw
 
     // Fills aRect row by row with a vertical gradient. Leaves the pen solid, brush null.
     void FillGradient(CWindowGc& aGc, const TRect& aRect, const TRgb& aTop, const TRgb& aBottom);
+
+    // Like FillGradient, with corners rounded to aRadius pixels (no anti-aliasing).
+    void FillRoundGradient(CWindowGc& aGc, const TRect& aRect, const TRgb& aTop, const TRgb& aBottom,
+                           TInt aRadius);
     }
 
 #endif // __WUNDERLANDDRAWUTILS_H__

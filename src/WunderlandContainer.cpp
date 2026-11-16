@@ -4,6 +4,7 @@
 #include <e32math.h>
 #include <gdi.h>
 #include "WunderlandAppList.h"
+#include "WunderlandCategoryList.h"
 #include "WunderlandContainer.h"
 #include "WunderlandTabBar.h"
 #include "WunderlandTooltip.h"
@@ -43,6 +44,8 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iTabBar->SetObserver(this);
     iAppList = CWunderlandAppList::NewL(*this);
     iAppList->SetObserver(this);
+    iCategoryList = CWunderlandCategoryList::NewL(*this);
+    iCategoryList->SetObserver(this);
     iTooltip = CWunderlandTooltip::NewL(*this);
     iTooltip->MakeVisible(EFalse);
     iCategories = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
@@ -51,10 +54,16 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     AddSampleCategoriesL();
     AddSampleAppsL();
     UpdateAppListL();
+    AddContentTypesL();
+    UpdatePage();
 
     SetRect(aRect);   // lays out the children via SizeChanged()
     FocusListL();     // start on the first entry, like Ovi Store
     ActivateL();
+    // ActivateL() only reaches the page that is a component control right
+    // now; a page that isn't activated ignores its own DrawDeferred() calls.
+    iAppList->ActivateL();
+    iCategoryList->ActivateL();
     }
 
 CWunderlandContainer::~CWunderlandContainer()
@@ -62,6 +71,7 @@ CWunderlandContainer::~CWunderlandContainer()
     iApps.Close();
     delete iCategories;
     delete iTooltip;
+    delete iCategoryList;
     delete iAppList;
     delete iTabBar;
     }
@@ -171,8 +181,8 @@ void CWunderlandContainer::AddSampleAppsL()
     #undef WUNDERLAND_COUNT
     }
 
-// Every entry, with its category under the name. The Categories and Search
-// pages don't exist yet, so the list is the same on every tab.
+// Every entry, with its category under the name. The Search page doesn't
+// exist yet, so it shows the same list as Home.
 void CWunderlandContainer::UpdateAppListL()
     {
     iAppList->Reset();
@@ -190,6 +200,54 @@ void CWunderlandContainer::UpdateAppListL()
         }
     }
 
+// TODO: fetch the content types from the store API once there is one.
+void CWunderlandContainer::AddContentTypesL()
+    {
+    _LIT(KTypeApps,   "Apps");
+    _LIT(KTypeGames,  "Games");
+    _LIT(KTypeThemes, "Themes");
+    iCategoryList->Reset();
+    iCategoryList->AppendL(KTypeApps);
+    iCategoryList->AppendL(KTypeGames);
+    iCategoryList->AppendL(KTypeThemes);
+    }
+
+MWunderlandPage& CWunderlandContainer::Page() const
+    {
+    if (iTabBar->Active() == CWunderlandTabBar::ETabCategories)
+        {
+        return *iCategoryList;
+        }
+    return *iAppList;   // Home and Search until they get their own pages
+    }
+
+CCoeControl* CWunderlandContainer::PageControl() const
+    {
+    if (iTabBar->Active() == CWunderlandTabBar::ETabCategories)
+        {
+        return iCategoryList;
+        }
+    return iAppList;
+    }
+
+// Only the active page is a component control, so only it is drawn and
+// gets pointer events. The other one drops its highlight.
+void CWunderlandContainer::UpdatePage()
+    {
+    const TBool categories = (iTabBar->Active() == CWunderlandTabBar::ETabCategories);
+    iAppList->MakeVisible(!categories);
+    iCategoryList->MakeVisible(categories);
+    if (categories)
+        {
+        iAppList->SetHighlighted(-1);
+        }
+    else
+        {
+        iCategoryList->SetHighlighted(-1);
+        }
+    DrawDeferred();
+    }
+
 TRect CWunderlandContainer::ContentRect() const
     {
     const TRect rect(Rect());
@@ -198,19 +256,19 @@ TRect CWunderlandContainer::ContentRect() const
 
 void CWunderlandContainer::FocusTabBarL()
     {
-    iAppList->SetHighlighted(-1);
+    Page().SetHighlighted(-1);
     iTabBar->SetBarFocused(ETrue);
     UpdateTooltipL();
     }
 
 void CWunderlandContainer::FocusListL()
     {
-    if (iAppList->Count() == 0)
+    if (Page().Count() == 0)
         {
         return;
         }
     iTabBar->SetBarFocused(EFalse);
-    iAppList->SetHighlighted(0);
+    Page().SetHighlighted(0);
     UpdateTooltipL();
     }
 
@@ -246,6 +304,7 @@ void CWunderlandContainer::SizeChanged()
     const TRect rect(Rect());
     iTabBar->SetRect(TRect(rect.iTl, TSize(rect.Width(), iTabBar->PreferredHeight(rect.Size()))));
     iAppList->SetRect(ContentRect());
+    iCategoryList->SetRect(ContentRect());
     TRAP_IGNORE(UpdateTooltipL());   // only leaves on OOM; the old tooltip stays
     }
 
@@ -271,7 +330,7 @@ CCoeControl* CWunderlandContainer::ComponentControl(TInt aIndex) const
         case 0:
             return iTabBar;
         case 1:
-            return iAppList;
+            return PageControl();
         case 2:
             return iTooltip;   // last: drawn over the list
         default:
@@ -288,13 +347,17 @@ void CWunderlandContainer::HandleControlEventL(CCoeControl* aControl, TCoeEvent 
     if (aControl == iTabBar)
         {
         // Focus moved or a tab was activated (key or tap)
+        if (!PageControl()->IsVisible())
+            {
+            UpdatePage();   // the active tab changed
+            }
         if (iTabBar->IsBarFocused())
             {
-            iAppList->SetHighlighted(-1);
+            Page().SetHighlighted(-1);
             }
         UpdateTooltipL();
         }
-    else if (aControl == iAppList)
+    else if (aControl == iAppList || aControl == iCategoryList)
         {
         // A tapped row takes the focus
         iTabBar->SetBarFocused(EFalse);
@@ -342,17 +405,17 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
                 }
             return EKeyWasConsumed;
         case EKeyDownArrow:
-            if (iAppList->Highlighted() < 0)
+            if (Page().Highlighted() < 0)
                 {
                 FocusListL();
                 }
             else
                 {
-                iAppList->MoveHighlight(1);   // stays on the last row
+                Page().MoveHighlight(1);   // stays on the last row
                 }
             return EKeyWasConsumed;
         case EKeyUpArrow:
-            if (iAppList->Highlighted() < 0 || !iAppList->MoveHighlight(-1))
+            if (Page().Highlighted() < 0 || !Page().MoveHighlight(-1))
                 {
                 FocusTabBarL();   // first row: up into the tab bar
                 }

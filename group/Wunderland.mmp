@@ -20,6 +20,7 @@ SOURCE            WunderlandContainer.cpp
 SOURCE            WunderlandTabBar.cpp
 SOURCE            WunderlandTooltip.cpp
 SOURCE            WunderlandAppList.cpp
+SOURCE            WunderlandCategoryList.cpp
 SOURCE            WunderlandDrawUtils.cpp
 
 SOURCEPATH        ..\data

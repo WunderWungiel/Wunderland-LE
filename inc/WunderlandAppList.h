@@ -2,6 +2,7 @@
 #define __WUNDERLANDAPPLIST_H__
 
 #include <coecntrl.h>
+#include "WunderlandPage.h"
 
 class CFont;
 class CFbsBitmap;
@@ -14,7 +15,7 @@ class CFbsBitmap;
 // Non-window-owning. Keys are fed by the parent (MoveHighlight); pointer
 // events arrive through the parent. Reports EEventStateChanged to its
 // observer when a tap highlights a row.
-class CWunderlandAppList : public CCoeControl
+class CWunderlandAppList : public CCoeControl, public MWunderlandPage
     {
 public:
     static CWunderlandAppList* NewL(const CCoeControl& aParent);
@@ -24,12 +25,11 @@ public:
     // aSubtitle may be empty: the name is then centred on its own.
     // aRating is clamped to 0..5.
     void AppendL(const TDesC& aName, const TDesC& aSubtitle, TInt aRating);
-    TInt Count() const;
 
-    TInt Highlighted() const;           // -1 if no row is highlighted
-    void SetHighlighted(TInt aIndex);   // -1 removes it; scrolls the row into view
-    // Moves the highlight by aDelta rows without wrapping. EFalse if it would
-    // leave the list (the parent then moves the focus elsewhere).
+public: // from MWunderlandPage
+    TInt Count() const;
+    TInt Highlighted() const;
+    void SetHighlighted(TInt aIndex);
     TBool MoveHighlight(TInt aDelta);
 
 public: // from CCoeControl
