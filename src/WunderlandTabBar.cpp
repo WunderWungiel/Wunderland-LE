@@ -190,6 +190,20 @@ void CWunderlandTabBar::MoveFocusL(TInt aDelta)
         }
     }
 
+TBool CWunderlandTabBar::SwitchTabL(TInt aDelta)
+    {
+    const TInt target = iActive + aDelta;
+    if (target < 0 || target >= ETabCount || target == iActive)
+        {
+        return EFalse;   // already the first / last tab
+        }
+    iActive = target;
+    iFocused = target;
+    DrawDeferred();
+    ReportEventL(MCoeControlObserver::EEventStateChanged);
+    return ETrue;
+    }
+
 void CWunderlandTabBar::ActivateFocusedL()
     {
     if (iActive != iFocused)

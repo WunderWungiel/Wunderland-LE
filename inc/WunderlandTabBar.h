@@ -35,6 +35,11 @@ public:
     TPtrC FocusedLabel() const;         // "Home", "Categories", "Search"
     TRect TabRect(TInt aIndex) const;   // in parent (window) coordinates
 
+    // Activates the previous (-1) or next (+1) tab, for left/right pressed
+    // in the page content. No wrapping; the focused tab follows. Notifies the
+    // observer and returns ETrue if the active tab changed.
+    TBool SwitchTabL(TInt aDelta);
+
     // Height for a bar in a client area of aArea: tall, like Ovi Store.
     TInt PreferredHeight(const TSize& aArea) const;
 

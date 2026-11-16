@@ -329,8 +329,18 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
             }
         return iTabBar->OfferKeyEventL(aKeyEvent, aType);   // left/right/select
         }
+    // In the page content, left/right switch tabs (S60 tab convention). Controls
+    // that need these keys themselves (the Search editor, an open category
+    // drop-down) must be offered the key before this point and get to keep it.
     switch (aKeyEvent.iCode)
         {
+        case EKeyLeftArrow:
+        case EKeyRightArrow:
+            if (iTabBar->SwitchTabL(aKeyEvent.iCode == EKeyLeftArrow ? -1 : 1))
+                {
+                FocusListL();   // focus stays in the content: first row of the new page
+                }
+            return EKeyWasConsumed;
         case EKeyDownArrow:
             if (iAppList->Highlighted() < 0)
                 {
