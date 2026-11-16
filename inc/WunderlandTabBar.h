@@ -3,8 +3,12 @@
 
 #include <coecntrl.h>
 
+class CFbsBitmap;
+
 // Ovi Store style top bar: three equal-width icon tabs (Home, Categories,
-// Search) on a white-to-light-grey gradient. The active tab's icon is blue.
+// Search) on a white-to-light-grey gradient. The active tab looks pressed in:
+// lighter background, blue engraved icon. Icons are SVGs from
+// WunderlandLE_0xE4F76EAD_tabs.mif, one per tab and state.
 // While the bar has the d-pad focus, the focused tab is drawn dark grey
 // (left/right move it, Select activates it); its name is shown by the
 // parent in a tooltip under the tab (see FocusedLabel / TabRect).
@@ -40,6 +44,7 @@ public: // from CCoeControl
 
 private: // from CCoeControl
     void Draw(const TRect& aRect) const;
+    void SizeChanged();
 
 private:
     CWunderlandTabBar();
@@ -47,9 +52,20 @@ private:
 
     void MoveFocusL(TInt aDelta);   // no wrapping; notifies the observer
     void ActivateFocusedL();        // notifies the observer
-    void DrawIcon(CWindowGc& aGc, TInt aTab, const TRect& aBox, const TRgb& aColour) const;
+    TSize IconSize() const;
 
 private:
+    enum TIconState
+        {
+        EIconNormal,
+        EIconActive,
+        EIconFocused,
+        EIconFocusedActive,
+        EIconStateCount
+        };
+
+    CFbsBitmap* iIcons[ETabCount][EIconStateCount];       // owned
+    CFbsBitmap* iIconMasks[ETabCount][EIconStateCount];   // owned
     TInt iActive;
     TInt iFocused;
     TBool iBarFocused;
