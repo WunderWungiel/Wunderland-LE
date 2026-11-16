@@ -289,7 +289,8 @@ void CWunderlandContainer::FocusListL()
     UpdateTooltipL();
     }
 
-// Under the focused tab, left-aligned with it, kept on screen.
+// Right under the focused tab and as wide as it, text centred. Wider only if
+// the text doesn't fit; then centred on the tab and kept on screen.
 void CWunderlandContainer::UpdateTooltipL()
     {
     const TBool show = iTabBar->IsBarFocused();
@@ -297,11 +298,23 @@ void CWunderlandContainer::UpdateTooltipL()
         {
         iTooltip->SetTextL(iTabBar->FocusedLabel());
         const TRect tab(iTabBar->TabRect(iTabBar->Focused()));
-        const TSize size(iTooltip->PreferredSize());
+        TSize size(iTooltip->PreferredSize());
         TInt x = tab.iTl.iX;
-        if (x + size.iWidth > Rect().iBr.iX)
+        if (size.iWidth <= tab.Width())
             {
-            x = Rect().iBr.iX - size.iWidth;
+            size.iWidth = tab.Width();
+            }
+        else
+            {
+            x = tab.iTl.iX - (size.iWidth - tab.Width()) / 2;
+            if (x + size.iWidth > Rect().iBr.iX)
+                {
+                x = Rect().iBr.iX - size.iWidth;
+                }
+            if (x < Rect().iTl.iX)
+                {
+                x = Rect().iTl.iX;
+                }
             }
         iTooltip->SetRect(TRect(TPoint(x, iTabBar->Rect().iBr.iY), size));
         }
