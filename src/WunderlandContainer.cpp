@@ -421,7 +421,14 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
             FocusListL();
             return EKeyWasConsumed;
             }
-        return iTabBar->OfferKeyEventL(aKeyEvent, aType);   // left/right/select
+        const TKeyResponse response = iTabBar->OfferKeyEventL(aKeyEvent, aType);   // left/right/select
+        if (aKeyEvent.iCode == EKeyOK || aKeyEvent.iCode == EKeyEnter)
+            {
+            // Selecting a tab (even the open one) goes to its first row.
+            // An empty page has none, so the bar keeps the focus.
+            FocusListL();
+            }
+        return response;
         }
     // In the page content, left/right switch tabs (S60 tab convention). Controls
     // that need these keys themselves (a future Search editor, an open category
