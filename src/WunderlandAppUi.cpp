@@ -37,10 +37,6 @@ void CWunderlandAppUi::HandleCommandL(TInt aCommand)
             Exit();
             break;
         default:
-            if (iContainer)
-                {
-                iContainer->HandleCommandL(aCommand);   // drop-down Select/Cancel
-                }
             break;
         }
     }

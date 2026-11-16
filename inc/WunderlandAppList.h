@@ -10,7 +10,7 @@ class CFbsBitmap;
 // tall as its square (placeholder) icon: icon on the left, bold app name
 // with an optional grey subtitle (the category) next to it, a 1-5 star
 // rating stuck to the right. Rows alternate #E8E8E8 / white; the highlighted
-// row turns dark grey like the category bar.
+// row turns dark grey.
 // Non-window-owning. Keys are fed by the parent (MoveHighlight); pointer
 // events arrive through the parent. Reports EEventStateChanged to its
 // observer when a tap highlights a row.

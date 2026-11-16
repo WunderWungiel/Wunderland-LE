@@ -14,9 +14,6 @@ namespace WunderlandDraw
 
     // Fills aRect row by row with a vertical gradient. Leaves the pen solid, brush null.
     void FillGradient(CWindowGc& aGc, const TRect& aRect, const TRgb& aTop, const TRgb& aBottom);
-
-    // Filled triangle with an optional 1 px drop shadow (aShadow == aColour disables it).
-    void FillTriangle(CWindowGc& aGc, const TPoint aPts[3], const TRgb& aColour, const TRgb& aShadow);
     }
 
 #endif // __WUNDERLANDDRAWUTILS_H__

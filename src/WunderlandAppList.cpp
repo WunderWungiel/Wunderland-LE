@@ -25,7 +25,7 @@ namespace
 
     const TRgb KEvenRowColor()      { return TRgb(0xE8, 0xE8, 0xE8); }   // first row, third, ...
     const TRgb KOddRowColor()       { return KRgbWhite; }
-    // Highlight: the category bar's grey gradient
+    // Highlight: dark grey gradient
     const TRgb KHiTopColor()        { return TRgb(0x96, 0x96, 0x96); }
     const TRgb KHiBottomColor()     { return TRgb(0x5E, 0x5E, 0x5E); }
     const TRgb KNameColor()         { return KRgbBlack; }

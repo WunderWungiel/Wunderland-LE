@@ -1,22 +1,17 @@
 #include <akndef.h>
 #include <avkon.hrh>
-#include <avkon.rsg>
-#include <eikbtgpc.h>
-#include <eikenv.h>
 #include <eikon.hrh>
 #include <e32math.h>
 #include <gdi.h>
 #include "WunderlandAppList.h"
-#include "WunderlandCategoryBar.h"
 #include "WunderlandContainer.h"
-#include "WunderlandDropdown.h"
 #include "WunderlandTabBar.h"
+#include "WunderlandTooltip.h"
 
 namespace
     {
     const TInt KCategoryGranularity = 16;
-    const TInt KHomeTab = 0;
-    const TInt KDropdownMargin = 4;   // drop-down inset from the screen edges
+    const TInt KContentTypes = 3;     // sample apps, games, themes
     const TInt KAppsPerType = 30;     // sample entries per content type
     const TInt KSampleSeed = 0x5EED;  // fixed: the same sample list on every start
 
@@ -46,53 +41,31 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
 
     iTabBar = CWunderlandTabBar::NewL(*this);
     iTabBar->SetObserver(this);
-    iCategoryBar = CWunderlandCategoryBar::NewL(*this);
     iAppList = CWunderlandAppList::NewL(*this);
     iAppList->SetObserver(this);
-    iDropdown = CWunderlandDropdown::NewL(*this);
-    iDropdown->SetObserver(this);
+    iTooltip = CWunderlandTooltip::NewL(*this);
+    iTooltip->MakeVisible(EFalse);
     iCategories = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
     EnableDragEvents();   // touch scrolling of the list
 
-    AddSampleContentTypesL();
     AddSampleCategoriesL();
     AddSampleAppsL();
-    UpdateCategoryBarL();
     UpdateAppListL();
 
-    SetRect(aRect);   // lays out the bars via SizeChanged()
+    SetRect(aRect);   // lays out the children via SizeChanged()
+    FocusListL();     // start on the first entry, like Ovi Store
     ActivateL();
     }
 
 CWunderlandContainer::~CWunderlandContainer()
     {
-    iSelectedCategory.Close();
     iApps.Close();
     delete iCategories;
-    delete iDropdown;
+    delete iTooltip;
     delete iAppList;
-    delete iCategoryBar;
     delete iTabBar;
     }
 
-// Sample data until the store has an API. "Home" always exists and comes first.
-void CWunderlandContainer::AddSampleContentTypesL()
-    {
-    _LIT(KHome, "Home");
-    _LIT(KApps, "Apps");
-    _LIT(KGames, "Games");
-    _LIT(KThemes, "Themes");
-    iTabBar->AppendTabL(KHome);
-    iTabBar->AppendTabL(KApps);
-    iTabBar->AppendTabL(KGames);
-    iTabBar->AppendTabL(KThemes);
-    for (TInt i = 0; i < iTabBar->Count(); ++i)
-        {
-        iSelectedCategory.AppendL(0);
-        }
-    }
-
-// The drop-down shows "All <type>" first, then these.
 void CWunderlandContainer::AddSampleCategoriesL()
     {
     _LIT(KCat1,  "Camera, photos, videos");
@@ -121,8 +94,7 @@ void CWunderlandContainer::AddSampleCategoriesL()
     iCategories->AppendL(KCat12);
     }
 
-// Random names, publishers, categories and ratings, generated from a fixed
-// seed. Home has no entries of its own: it lists everything.
+// Random names, categories and ratings, generated from a fixed seed.
 void CWunderlandContainer::AddSampleAppsL()
     {
     const TText* const appFirst[] =
@@ -155,17 +127,11 @@ void CWunderlandContainer::AddSampleAppsL()
         _S("Glass"), _S("Waves"), _S("Lines"), _S("Dreams"), _S("Leaves"), _S("Shine"),
         _S("Bubbles"), _S("Metal")
         };
-    const TText* const publishers[] =
-        {
-        _S("Moonbit"), _S("Pixel Forge"), _S("Gizmo Studio"), _S("Northwind Soft"),
-        _S("Bluebird Mobile"), _S("Wunder Apps")
-        };
     #define WUNDERLAND_COUNT(a) (static_cast<TInt>(sizeof(a) / sizeof((a)[0])))
 
     TInt64 seed = KSampleSeed;
-    const TInt types = iTabBar->Count();
     const TInt categories = iCategories->MdcaCount();
-    for (TInt type = KHomeTab + 1; type < types; ++type)
+    for (TInt type = 0; type < KContentTypes; ++type)
         {
         const TText* const* first;
         const TText* const* second;
@@ -173,15 +139,15 @@ void CWunderlandContainer::AddSampleAppsL()
         TInt secondCount;
         switch (type)
             {
-            case 1:   // Apps
+            case 0:   // apps
                 first = appFirst;     firstCount = WUNDERLAND_COUNT(appFirst);
                 second = appSecond;   secondCount = WUNDERLAND_COUNT(appSecond);
                 break;
-            case 2:   // Games
+            case 1:   // games
                 first = gameFirst;    firstCount = WUNDERLAND_COUNT(gameFirst);
                 second = gameSecond;  secondCount = WUNDERLAND_COUNT(gameSecond);
                 break;
-            default:  // Themes
+            default:  // themes
                 first = themeFirst;   firstCount = WUNDERLAND_COUNT(themeFirst);
                 second = themeSecond; secondCount = WUNDERLAND_COUNT(themeSecond);
                 break;
@@ -197,9 +163,6 @@ void CWunderlandContainer::AddSampleAppsL()
                 app.iName.Append(' ');
                 app.iName.Append(secondWord);
                 }
-            const TPtrC publisher(publishers[Random(seed, WUNDERLAND_COUNT(publishers))]);
-            app.iPublisher.Copy(publisher.Left(app.iPublisher.MaxLength()));
-            app.iContentType = type;
             app.iCategory = categories > 0 ? Random(seed, categories) : 0;
             app.iRating = 1 + Random(seed, 5);
             iApps.AppendL(app);
@@ -208,71 +171,18 @@ void CWunderlandContainer::AddSampleAppsL()
     #undef WUNDERLAND_COUNT
     }
 
-TBool CWunderlandContainer::HasCategoryBar() const
-    {
-    return iTabBar->Selected() != KHomeTab;
-    }
-
-void CWunderlandContainer::UpdateCategoryBarL()
-    {
-    const TBool show = HasCategoryBar();
-    iCategoryBar->MakeVisible(show);
-    if (!show)
-        {
-        iCategoryBar->SetHighlighted(EFalse);
-        return;
-        }
-
-    // Items for this content type: "All <type, lower case>" + the categories
-    const TPtrC type(iTabBar->SelectedLabel());
-    _LIT(KAllPrefix, "All ");
-    HBufC* all = HBufC::NewLC(KAllPrefix().Length() + type.Length());
-    TPtr allPtr(all->Des());
-    allPtr.Append(KAllPrefix);
-    allPtr.Append(type);
-    allPtr.MidTPtr(KAllPrefix().Length()).LowerCase();
-
-    CDesCArrayFlat* items = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
-    CleanupStack::PushL(items);
-    items->AppendL(*all);
-    const TInt count = iCategories->MdcaCount();
-    for (TInt i = 0; i < count; ++i)
-        {
-        items->AppendL(iCategories->MdcaPoint(i));
-        }
-    iDropdown->SetItemsL(*items);
-
-    TInt& selected = iSelectedCategory[iTabBar->Selected()];
-    if (selected < 0 || selected >= items->MdcaCount())
-        {
-        selected = 0;
-        }
-    iCategoryBar->SetPathL(type, items->MdcaPoint(selected));
-
-    CleanupStack::PopAndDestroy(items);
-    CleanupStack::PopAndDestroy(all);
-    }
-
-// Entries of the selected content type (all of them on Home), filtered by the
-// selected category. The category is shown under the name only when the
-// list isn't already limited to one category.
+// Every entry, with its category under the name. The Categories and Search
+// pages don't exist yet, so the list is the same on every tab.
 void CWunderlandContainer::UpdateAppListL()
     {
     iAppList->Reset();
-    const TInt type = iTabBar->Selected();
-    const TInt category = HasCategoryBar() ? iSelectedCategory[type] - 1 : -1;   // -1: all
     const TInt categories = iCategories->MdcaCount();
     const TInt count = iApps.Count();
     for (TInt i = 0; i < count; ++i)
         {
         const TApp& app = iApps[i];
-        if ((type != KHomeTab && app.iContentType != type) ||
-            (category >= 0 && app.iCategory != category))
-            {
-            continue;
-            }
         TPtrC subtitle(KNullDesC);
-        if (category < 0 && app.iCategory >= 0 && app.iCategory < categories)
+        if (app.iCategory >= 0 && app.iCategory < categories)
             {
             subtitle.Set(iCategories->MdcaPoint(app.iCategory));
             }
@@ -283,64 +193,47 @@ void CWunderlandContainer::UpdateAppListL()
 TRect CWunderlandContainer::ContentRect() const
     {
     const TRect rect(Rect());
-    const TInt top = HasCategoryBar() ? iCategoryBar->Rect().iBr.iY : iTabBar->Rect().iBr.iY;
-    return TRect(rect.iTl.iX, top, rect.iBr.iX, rect.iBr.iY);
+    return TRect(rect.iTl.iX, iTabBar->Rect().iBr.iY, rect.iBr.iX, rect.iBr.iY);
     }
 
-void CWunderlandContainer::OpenDropdownL()
+void CWunderlandContainer::FocusTabBarL()
     {
-    if (!HasCategoryBar() || iDropdown->IsOpen())
+    iAppList->SetHighlighted(-1);
+    iTabBar->SetBarFocused(ETrue);
+    UpdateTooltipL();
+    }
+
+void CWunderlandContainer::FocusListL()
+    {
+    if (iAppList->Count() == 0)
         {
         return;
         }
-    iAppList->SetHighlighted(-1);
-    iCategoryBar->SetHighlighted(ETrue);
-    TRect area(Rect().iTl.iX, iCategoryBar->Rect().iBr.iY, Rect().iBr.iX, Rect().iBr.iY);
-    area.Shrink(KDropdownMargin, 0);
-    area.iBr.iY -= KDropdownMargin;
-    iDropdown->Open(area, iSelectedCategory[iTabBar->Selected()]);
-    if (iDropdown->IsOpen())
-        {
-        SetSoftkeysL(R_AVKON_SOFTKEYS_SELECT_CANCEL);
-        }
+    iTabBar->SetBarFocused(EFalse);
+    iAppList->SetHighlighted(0);
+    UpdateTooltipL();
     }
 
-void CWunderlandContainer::CloseDropdownL()
+// Under the focused tab, left-aligned with it, kept on screen.
+void CWunderlandContainer::UpdateTooltipL()
     {
-    if (iDropdown->IsOpen())
+    const TBool show = iTabBar->IsBarFocused();
+    if (show)
         {
-        iDropdown->Close();
-        SetSoftkeysL(R_AVKON_SOFTKEYS_OPTIONS_EXIT);
-        DrawDeferred();
+        iTooltip->SetTextL(iTabBar->FocusedLabel());
+        const TRect tab(iTabBar->TabRect(iTabBar->Focused()));
+        const TSize size(iTooltip->PreferredSize());
+        TInt x = tab.iTl.iX;
+        if (x + size.iWidth > Rect().iBr.iX)
+            {
+            x = Rect().iBr.iX - size.iWidth;
+            }
+        iTooltip->SetRect(TRect(TPoint(x, iTabBar->Rect().iBr.iY), size));
         }
-    }
-
-void CWunderlandContainer::SetSoftkeysL(TInt aResourceId)
-    {
-    CEikButtonGroupContainer* cba = CEikButtonGroupContainer::Current();
-    if (cba)
+    if (show || iTooltip->IsVisible())
         {
-        cba->SetCommandSetL(aResourceId);
-        cba->DrawDeferred();
-        }
-    }
-
-TBool CWunderlandContainer::HandleCommandL(TInt aCommand)
-    {
-    if (!iDropdown->IsOpen())
-        {
-        return EFalse;
-        }
-    switch (aCommand)
-        {
-        case EAknSoftkeySelect:
-            iDropdown->ChooseL();   // comes back through HandleControlEventL
-            return ETrue;
-        case EAknSoftkeyCancel:
-            CloseDropdownL();
-            return ETrue;
-        default:
-            return EFalse;
+        iTooltip->MakeVisible(show);
+        DrawDeferred();   // repaints the list where the tooltip was
         }
     }
 
@@ -351,10 +244,9 @@ void CWunderlandContainer::SizeChanged()
         return;
         }
     const TRect rect(Rect());
-    iTabBar->SetRect(TRect(rect.iTl, TSize(rect.Width(), iTabBar->PreferredHeight())));
-    iCategoryBar->SetRect(TRect(TPoint(rect.iTl.iX, iTabBar->Rect().iBr.iY),
-                                TSize(rect.Width(), iCategoryBar->PreferredHeight())));
+    iTabBar->SetRect(TRect(rect.iTl, TSize(rect.Width(), iTabBar->PreferredHeight(rect.Size()))));
     iAppList->SetRect(ContentRect());
+    TRAP_IGNORE(UpdateTooltipL());   // only leaves on OOM; the old tooltip stays
     }
 
 void CWunderlandContainer::HandleResourceChange(TInt aType)
@@ -362,15 +254,14 @@ void CWunderlandContainer::HandleResourceChange(TInt aType)
     CCoeControl::HandleResourceChange(aType);   // forwards to the child controls
     if (aType == KEikDynamicLayoutVariantSwitch)
         {
-        TRAP_IGNORE(CloseDropdownL());   // its size depends on the old layout
-        SizeChanged();   // layout fonts (and so the bar heights) may have changed
+        SizeChanged();   // bar height and fonts depend on the layout
         DrawDeferred();
         }
     }
 
 TInt CWunderlandContainer::CountComponentControls() const
     {
-    return iTabBar ? 4 : 0;
+    return iTabBar ? 3 : 0;
     }
 
 CCoeControl* CWunderlandContainer::ComponentControl(TInt aIndex) const
@@ -380,11 +271,9 @@ CCoeControl* CWunderlandContainer::ComponentControl(TInt aIndex) const
         case 0:
             return iTabBar;
         case 1:
-            return iCategoryBar;
-        case 2:
             return iAppList;
-        case 3:
-            return iDropdown;
+        case 2:
+            return iTooltip;   // last: drawn over the list
         default:
             return NULL;
         }
@@ -398,23 +287,18 @@ void CWunderlandContainer::HandleControlEventL(CCoeControl* aControl, TCoeEvent 
         }
     if (aControl == iTabBar)
         {
-        CloseDropdownL();
-        UpdateCategoryBarL();
-        UpdateAppListL();
-        SizeChanged();    // the list starts higher on Home (no category bar)
-        DrawDeferred();
-        }
-    else if (aControl == iDropdown)
-        {
-        iSelectedCategory[iTabBar->Selected()] = iDropdown->Highlighted();
-        CloseDropdownL();
-        UpdateCategoryBarL();
-        UpdateAppListL();
-        DrawDeferred();
+        // Focus moved or a tab was activated (key or tap)
+        if (iTabBar->IsBarFocused())
+            {
+            iAppList->SetHighlighted(-1);
+            }
+        UpdateTooltipL();
         }
     else if (aControl == iAppList)
         {
-        iCategoryBar->SetHighlighted(EFalse);   // a tapped row takes the focus
+        // A tapped row takes the focus
+        iTabBar->SetBarFocused(EFalse);
+        UpdateTooltipL();
         }
     }
 
@@ -431,96 +315,39 @@ void CWunderlandContainer::Draw(const TRect& /*aRect*/) const
 
 TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode aType)
     {
-    if (iDropdown->IsOpen())
+    if (aType != EEventKey)
         {
-        return iDropdown->OfferKeyEventL(aKeyEvent, aType);
+        return EKeyWasNotConsumed;
         }
-    if (aType == EEventKey)
+    // Focus runs tab bar -> list rows; up/down move it.
+    if (iTabBar->IsBarFocused())
         {
-        // Focus runs tab bar -> category bar (not on Home) -> list rows.
-        // Up/down move it; Select on the category bar opens the drop-down.
-        const TBool inList = iAppList->Highlighted() >= 0;
-        switch (aKeyEvent.iCode)
+        if (aKeyEvent.iCode == EKeyDownArrow)
             {
-            case EKeyDownArrow:
-                if (inList)
-                    {
-                    iAppList->MoveHighlight(1);   // stays on the last row
-                    }
-                else if (HasCategoryBar() && !iCategoryBar->IsHighlighted())
-                    {
-                    iCategoryBar->SetHighlighted(ETrue);
-                    }
-                else if (iAppList->Count() > 0)
-                    {
-                    iCategoryBar->SetHighlighted(EFalse);
-                    iAppList->SetHighlighted(0);
-                    }
-                return EKeyWasConsumed;
-            case EKeyUpArrow:
-                if (inList)
-                    {
-                    if (!iAppList->MoveHighlight(-1))   // first row: leave the list
-                        {
-                        iAppList->SetHighlighted(-1);
-                        iCategoryBar->SetHighlighted(HasCategoryBar());
-                        }
-                    return EKeyWasConsumed;
-                    }
-                if (iCategoryBar->IsHighlighted())
-                    {
-                    iCategoryBar->SetHighlighted(EFalse);
-                    return EKeyWasConsumed;
-                    }
-                break;
-            case EKeyOK:
-            case EKeyEnter:
-                if (HasCategoryBar() && iCategoryBar->IsHighlighted())
-                    {
-                    OpenDropdownL();
-                    return EKeyWasConsumed;
-                    }
-                break;
-            default:
-                break;
+            FocusListL();
+            return EKeyWasConsumed;
             }
+        return iTabBar->OfferKeyEventL(aKeyEvent, aType);   // left/right/select
         }
-    return iTabBar->OfferKeyEventL(aKeyEvent, aType);   // left/right; softkeys etc. fall through
-    }
-
-void CWunderlandContainer::HandlePointerEventL(const TPointerEvent& aPointerEvent)
-    {
-    // Only delivered on touch devices (S60 5th Edition). Taps inside the open
-    // drop-down go to its own window; anything reaching us closes it.
-    if (iDropdown->IsOpen())
+    switch (aKeyEvent.iCode)
         {
-        if (aPointerEvent.iType == TPointerEvent::EButton1Down)
-            {
-            CloseDropdownL();
-            iSwallowPointer = ETrue;
-            }
-        return;
+        case EKeyDownArrow:
+            if (iAppList->Highlighted() < 0)
+                {
+                FocusListL();
+                }
+            else
+                {
+                iAppList->MoveHighlight(1);   // stays on the last row
+                }
+            return EKeyWasConsumed;
+        case EKeyUpArrow:
+            if (iAppList->Highlighted() < 0 || !iAppList->MoveHighlight(-1))
+                {
+                FocusTabBarL();   // first row: up into the tab bar
+                }
+            return EKeyWasConsumed;
+        default:
+            return EKeyWasNotConsumed;
         }
-    if (iSwallowPointer)
-        {
-        if (aPointerEvent.iType == TPointerEvent::EButton1Up)
-            {
-            iSwallowPointer = EFalse;
-            }
-        return;
-        }
-    if (HasCategoryBar() && iCategoryBar->Rect().Contains(aPointerEvent.iPosition))
-        {
-        // Open on release: the up event would otherwise land on us and close it.
-        if (aPointerEvent.iType == TPointerEvent::EButton1Down)
-            {
-            iCategoryBar->SetHighlighted(ETrue);
-            }
-        else if (aPointerEvent.iType == TPointerEvent::EButton1Up)
-            {
-            OpenDropdownL();
-            }
-        return;
-        }
-    CCoeControl::HandlePointerEventL(aPointerEvent);   // tab bar, list
     }

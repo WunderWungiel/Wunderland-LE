@@ -18,8 +18,7 @@ SOURCE            WunderlandDocument.cpp
 SOURCE            WunderlandAppUi.cpp
 SOURCE            WunderlandContainer.cpp
 SOURCE            WunderlandTabBar.cpp
-SOURCE            WunderlandCategoryBar.cpp
-SOURCE            WunderlandDropdown.cpp
+SOURCE            WunderlandTooltip.cpp
 SOURCE            WunderlandAppList.cpp
 SOURCE            WunderlandDrawUtils.cpp
 

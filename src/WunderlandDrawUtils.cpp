@@ -25,24 +25,3 @@ void WunderlandDraw::FillGradient(CWindowGc& aGc, const TRect& aRect, const TRgb
         aGc.DrawLine(TPoint(aRect.iTl.iX, y), TPoint(aRect.iBr.iX, y));   // end point excluded
         }
     }
-
-void WunderlandDraw::FillTriangle(CWindowGc& aGc, const TPoint aPts[3], const TRgb& aColour, const TRgb& aShadow)
-    {
-    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
-    aGc.SetBrushStyle(CGraphicsContext::ESolidBrush);
-    if (aShadow != aColour)
-        {
-        TPoint shadow[3];
-        for (TInt i = 0; i < 3; ++i)
-            {
-            shadow[i] = aPts[i] + TPoint(0, 1);
-            }
-        aGc.SetPenColor(aShadow);
-        aGc.SetBrushColor(aShadow);
-        aGc.DrawPolygon(shadow, 3);
-        }
-    aGc.SetPenColor(aColour);
-    aGc.SetBrushColor(aColour);
-    aGc.DrawPolygon(aPts, 3);
-    aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
-    }

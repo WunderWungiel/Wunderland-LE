@@ -2,27 +2,37 @@
 #define __WUNDERLANDTABBAR_H__
 
 #include <coecntrl.h>
-#include <badesca.h>
 
-class CFont;
-
-// Horizontal, scrollable category bar ("Home", "Apps", ...) drawn in the
-// Ovi Store style: arrows on both ends, the selected tab kept centred.
+// Ovi Store style top bar: three equal-width icon tabs (Home, Categories,
+// Search) on a white-to-light-grey gradient. The active tab's icon is blue.
+// While the bar has the d-pad focus, the focused tab is drawn dark grey
+// (left/right move it, Select activates it); its name is shown by the
+// parent in a tooltip under the tab (see FocusedLabel / TabRect).
 // Non-window-owning: lives inside the parent control's window.
-// Reports EEventStateChanged to its observer when the selection changes.
+// Reports EEventStateChanged to its observer when the focus or active tab changes.
 class CWunderlandTabBar : public CCoeControl
     {
 public:
+    enum TTab
+        {
+        ETabHome,
+        ETabCategories,
+        ETabSearch,
+        ETabCount
+        };
+
     static CWunderlandTabBar* NewL(const CCoeControl& aParent);
     ~CWunderlandTabBar();
 
-    void AppendTabL(const TDesC& aLabel);
-    TInt Count() const;
-    TInt Selected() const;
-    TPtrC SelectedLabel() const;
-    void SetSelected(TInt aIndex);   // clamps; redraws; does not notify the observer
+    TInt Active() const;
+    TInt Focused() const;               // tab under the d-pad focus
+    TBool IsBarFocused() const;
+    void SetBarFocused(TBool aFocused); // redraws if changed; does not notify the observer
+    TPtrC FocusedLabel() const;         // "Home", "Categories", "Search"
+    TRect TabRect(TInt aIndex) const;   // in parent (window) coordinates
 
-    TInt PreferredHeight() const;    // depends on the current layout font
+    // Height for a bar in a client area of aArea: tall, like Ovi Store.
+    TInt PreferredHeight(const TSize& aArea) const;
 
 public: // from CCoeControl
     TKeyResponse OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode aType);
@@ -30,28 +40,19 @@ public: // from CCoeControl
 
 private: // from CCoeControl
     void Draw(const TRect& aRect) const;
-    void SizeChanged();
 
 private:
     CWunderlandTabBar();
     void ConstructL(const CCoeControl& aParent);
 
-    const CFont* Font() const;
-    TInt ArrowWidth() const;
-    TRect LeftArrowRect() const;
-    TRect RightArrowRect() const;
-    TRect Viewport() const;                      // area between the arrows
-    TInt TabWidth(TInt aIndex) const;
-    TRect TabRect(TInt aIndex) const;            // in control coordinates, scrolled
-    TInt TotalTabsWidth() const;
-    void UpdateScroll();                         // centre the selected tab
-    void MoveSelectionL(TInt aDelta);            // select + notify observer
-    void DrawArrow(CWindowGc& aGc, const TRect& aRect, TBool aLeft, TBool aEnabled) const;
+    void MoveFocusL(TInt aDelta);   // no wrapping; notifies the observer
+    void ActivateFocusedL();        // notifies the observer
+    void DrawIcon(CWindowGc& aGc, TInt aTab, const TRect& aBox, const TRgb& aColour) const;
 
 private:
-    CDesCArrayFlat* iLabels;   // owned
-    TInt iSelected;
-    TInt iScrollX;             // pixels the tab strip is shifted left
+    TInt iActive;
+    TInt iFocused;
+    TBool iBarFocused;
     };
 
 #endif // __WUNDERLANDTABBAR_H__

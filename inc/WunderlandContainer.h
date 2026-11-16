@@ -5,25 +5,20 @@
 #include <badesca.h>
 
 class CWunderlandTabBar;
-class CWunderlandCategoryBar;
-class CWunderlandDropdown;
+class CWunderlandTooltip;
 class CWunderlandAppList;
 
-// Main view: content-type tab bar on top; on content-type tabs (not Home) a
-// "<Type> > <Category>" bar below it that opens a category drop-down;
-// the list of entries (sample data for now) below that.
+// Main view: icon tab bar (Home / Categories / Search) on top, the list of
+// entries (sample data for now) below it. While the tab bar has the d-pad
+// focus, a tooltip under the focused tab shows its name.
 class CWunderlandContainer : public CCoeControl, public MCoeControlObserver
     {
 public:
     static CWunderlandContainer* NewL(const TRect& aRect);
     ~CWunderlandContainer();
 
-    // Softkey commands while the drop-down is open. ETrue if handled.
-    TBool HandleCommandL(TInt aCommand);
-
 public: // from CCoeControl
     TKeyResponse OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode aType);
-    void HandlePointerEventL(const TPointerEvent& aPointerEvent);
     void HandleResourceChange(TInt aType);
 private: // from CCoeControl
     void Draw(const TRect& aRect) const;
@@ -35,18 +30,14 @@ private: // from MCoeControlObserver
 private:
     CWunderlandContainer();
     void ConstructL(const TRect& aRect);
-    void AddSampleContentTypesL();
     void AddSampleCategoriesL();
     void AddSampleAppsL();
+    void UpdateAppListL();
 
-    TRect ContentRect() const;               // below the tab bar / category bar
-
-    TBool HasCategoryBar() const;            // not on Home
-    void UpdateCategoryBarL();               // text, visibility, drop-down items
-    void UpdateAppListL();                   // entries for the current tab + category
-    void OpenDropdownL();
-    void CloseDropdownL();                   // restores the softkeys
-    void SetSoftkeysL(TInt aResourceId);
+    TRect ContentRect() const;    // below the tab bar
+    void FocusTabBarL();          // takes the highlight off the list
+    void FocusListL();            // first row; no-op on an empty list
+    void UpdateTooltipL();        // text, position, visibility
 
 private:
     // One store entry (sample data until the store has an API)
@@ -54,20 +45,15 @@ private:
         {
     public:
         TBuf<40> iName;
-        TBuf<40> iPublisher;
-        TInt iContentType;   // tab index
         TInt iCategory;      // index into iCategories
         TInt iRating;        // 1..5
         };
 
-    CWunderlandTabBar* iTabBar;              // owned
-    CWunderlandCategoryBar* iCategoryBar;    // owned
-    CWunderlandDropdown* iDropdown;          // owned
-    CWunderlandAppList* iAppList;            // owned
-    RArray<TApp> iApps;                      // all entries of all content types
-    CDesCArrayFlat* iCategories;             // owned; shared by all content types for now
-    RArray<TInt> iSelectedCategory;          // per tab; 0 = "All <type>"
-    TBool iSwallowPointer;                   // eat the rest of a tap that closed the drop-down
+    CWunderlandTabBar* iTabBar;      // owned
+    CWunderlandAppList* iAppList;    // owned
+    CWunderlandTooltip* iTooltip;    // owned
+    RArray<TApp> iApps;
+    CDesCArrayFlat* iCategories;     // owned
     };
 
 #endif // __WUNDERLANDCONTAINER_H__

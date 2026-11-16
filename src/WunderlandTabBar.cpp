@@ -1,4 +1,3 @@
-#include <aknutils.h>
 #include <avkon.hrh>
 #include <gdi.h>
 #include <w32std.h>
@@ -9,30 +8,28 @@ using WunderlandDraw::FillGradient;
 
 namespace
     {
-    const TInt KLabelGranularity = 4;
-    const TInt KTabHPad   = 10;  // text padding inside a tab
-    const TInt KTabGap    = 2;   // space between tabs
-    const TInt KTabVInset = 3;   // frame inset from the bar's top/bottom edge
-    const TInt KTabVPad   = 3;   // text padding above/below inside the frame
+    const TInt KMinHeight = 32;
+    const TInt KHeightDivisor = 6;   // bar height = shorter screen side / 6 (40 px on 240 px)
+    const TInt KSeparatorInset = 6;  // separators stop short of the bar's top edge
 
-    // Bar: glossy two-segment vertical gradient around #2878C2.
-    const TRgb KBarTopColor()      { return TRgb(0x6C, 0xAC, 0xE6); }
-    const TRgb KBarMidHiColor()    { return TRgb(0x44, 0x8E, 0xD2); }   // end of the gloss
-    const TRgb KBarMidLoColor()    { return TRgb(0x28, 0x78, 0xC2); }   // #2878C2
-    const TRgb KBarBottomColor()   { return TRgb(0x1E, 0x66, 0xAA); }
-    const TRgb KBarHighlightColor(){ return TRgb(0xA4, 0xCE, 0xF4); }   // top edge
-    const TRgb KBarShadeColor()    { return TRgb(0x10, 0x46, 0x7C); }   // bottom edge
-    // Every tab sits in a square frame with a faint whitish border; the
-    // selected one has a dark gradient fill and a brighter border.
-    const TRgb KSelTopColor()      { return TRgb(0x1C, 0x5E, 0x9E); }
-    const TRgb KSelBottomColor()   { return TRgb(0x0A, 0x34, 0x62); }
-    const TRgb KSelTextColor()     { return KRgbWhite; }
-    const TRgb KSelBorderColor()   { return TRgb(0xC8, 0xE0, 0xF6); }
-    const TRgb KTabBorderColor()   { return TRgb(0x8E, 0xBE, 0xEA); }
-    const TRgb KTabTextColor()     { return TRgb(0x08, 0x24, 0x44); }   // unselected: dark on bar
-    const TRgb KArrowColor()       { return KRgbWhite; }
-    const TRgb KArrowDimColor()    { return TRgb(0x8C, 0xBC, 0xE8); }
-    const TRgb KArrowShadowColor() { return TRgb(0x10, 0x46, 0x7C); }
+    // Bar: white at the top fading to light grey
+    const TRgb KBarTopColor()        { return KRgbWhite; }
+    const TRgb KBarBottomColor()     { return TRgb(0xD2, 0xD6, 0xDB); }
+    const TRgb KBarShadeColor()      { return TRgb(0xA6, 0xAA, 0xB0); }   // bottom edge
+    const TRgb KSeparatorColor()     { return TRgb(0xB4, 0xB8, 0xBE); }
+    const TRgb KSeparatorHiColor()   { return KRgbWhite; }
+    // Focused tab: dark grey gradient
+    const TRgb KFocusTopColor()      { return TRgb(0x6C, 0x71, 0x78); }
+    const TRgb KFocusBottomColor()   { return TRgb(0x3E, 0x42, 0x48); }
+    // Icons
+    const TRgb KIconColor()          { return TRgb(0x4C, 0x51, 0x58); }
+    const TRgb KIconActiveColor()    { return TRgb(0x1C, 0x64, 0xC8); }
+    const TRgb KIconFocusColor()     { return TRgb(0xF0, 0xF0, 0xF0); }
+    const TRgb KIconFocusActiveColor(){ return TRgb(0x8C, 0xC0, 0xFF); }
+
+    _LIT(KLabelHome, "Home");
+    _LIT(KLabelCategories, "Categories");
+    _LIT(KLabelSearch, "Search");
     }
 
 CWunderlandTabBar* CWunderlandTabBar::NewL(const CCoeControl& aParent)
@@ -45,189 +42,124 @@ CWunderlandTabBar* CWunderlandTabBar::NewL(const CCoeControl& aParent)
     }
 
 CWunderlandTabBar::CWunderlandTabBar()
+    : iActive(ETabHome), iFocused(ETabHome)
     {
     }
 
 void CWunderlandTabBar::ConstructL(const CCoeControl& aParent)
     {
     SetContainerWindowL(aParent);
-    iLabels = new (ELeave) CDesCArrayFlat(KLabelGranularity);
     }
 
 CWunderlandTabBar::~CWunderlandTabBar()
     {
-    delete iLabels;
     }
 
-void CWunderlandTabBar::AppendTabL(const TDesC& aLabel)
+TInt CWunderlandTabBar::Active() const
     {
-    iLabels->AppendL(aLabel);
-    UpdateScroll();
+    return iActive;
     }
 
-TInt CWunderlandTabBar::Count() const
+TInt CWunderlandTabBar::Focused() const
     {
-    return iLabels->MdcaCount();
+    return iFocused;
     }
 
-TInt CWunderlandTabBar::Selected() const
+TBool CWunderlandTabBar::IsBarFocused() const
     {
-    return iSelected;
+    return iBarFocused;
     }
 
-TPtrC CWunderlandTabBar::SelectedLabel() const
+void CWunderlandTabBar::SetBarFocused(TBool aFocused)
     {
-    return Count() > 0 ? iLabels->MdcaPoint(iSelected) : TPtrC();
-    }
-
-void CWunderlandTabBar::SetSelected(TInt aIndex)
-    {
-    const TInt count = Count();
-    if (count == 0)
+    if (!aFocused != !iBarFocused)
         {
-        return;
-        }
-    if (aIndex < 0)
-        {
-        aIndex = 0;
-        }
-    else if (aIndex >= count)
-        {
-        aIndex = count - 1;
-        }
-    iSelected = aIndex;
-    UpdateScroll();
-    DrawDeferred();
-    }
-
-void CWunderlandTabBar::MoveSelectionL(TInt aDelta)
-    {
-    const TInt old = iSelected;
-    SetSelected(iSelected + aDelta);
-    if (iSelected != old)
-        {
-        ReportEventL(MCoeControlObserver::EEventStateChanged);
+        iBarFocused = aFocused;
+        if (iBarFocused)
+            {
+            iFocused = iActive;   // browsing starts from the current page
+            }
+        DrawDeferred();
         }
     }
 
-// ---------------------------------------------------------------------------
-// Geometry
-
-const CFont* CWunderlandTabBar::Font() const
+TPtrC CWunderlandTabBar::FocusedLabel() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontPrimarySmallFont);   // small bold, like Ovi Store
-    }
-
-TInt CWunderlandTabBar::PreferredHeight() const
-    {
-    return Font()->HeightInPixels() + 2 * (KTabVInset + KTabVPad);
-    }
-
-TInt CWunderlandTabBar::ArrowWidth() const
-    {
-    return Rect().Height() * 2 / 3;
-    }
-
-TRect CWunderlandTabBar::LeftArrowRect() const
-    {
-    const TRect r(Rect());
-    return TRect(r.iTl, TSize(ArrowWidth(), r.Height()));
-    }
-
-TRect CWunderlandTabBar::RightArrowRect() const
-    {
-    const TRect r(Rect());
-    return TRect(TPoint(r.iBr.iX - ArrowWidth(), r.iTl.iY), r.iBr);
-    }
-
-TRect CWunderlandTabBar::Viewport() const
-    {
-    return TRect(LeftArrowRect().iBr.iX, Rect().iTl.iY, RightArrowRect().iTl.iX, Rect().iBr.iY);
-    }
-
-TInt CWunderlandTabBar::TabWidth(TInt aIndex) const
-    {
-    return Font()->TextWidthInPixels(iLabels->MdcaPoint(aIndex)) + 2 * KTabHPad;
-    }
-
-TInt CWunderlandTabBar::TotalTabsWidth() const
-    {
-    TInt total = 0;
-    const TInt count = Count();
-    for (TInt i = 0; i < count; ++i)
+    switch (iFocused)
         {
-        total += TabWidth(i);
+        case ETabCategories:
+            return TPtrC(KLabelCategories);
+        case ETabSearch:
+            return TPtrC(KLabelSearch);
+        default:
+            return TPtrC(KLabelHome);
         }
-    if (count > 1)
-        {
-        total += (count - 1) * KTabGap;
-        }
-    return total;
+    }
+
+TInt CWunderlandTabBar::PreferredHeight(const TSize& aArea) const
+    {
+    const TInt side = aArea.iWidth < aArea.iHeight ? aArea.iWidth : aArea.iHeight;
+    const TInt height = side / KHeightDivisor;
+    return height > KMinHeight ? height : KMinHeight;
     }
 
 TRect CWunderlandTabBar::TabRect(TInt aIndex) const
     {
-    const TRect view(Viewport());
-    TInt x = view.iTl.iX - iScrollX;
-    for (TInt i = 0; i < aIndex; ++i)
-        {
-        x += TabWidth(i) + KTabGap;
-        }
-    return TRect(x, view.iTl.iY + KTabVInset, x + TabWidth(aIndex), view.iBr.iY - KTabVInset);
-    }
-
-void CWunderlandTabBar::UpdateScroll()
-    {
-    const TInt viewWidth = Viewport().Width();
-    const TInt total = TotalTabsWidth();
-    if (Count() == 0 || viewWidth <= 0 || total <= viewWidth)
-        {
-        iScrollX = 0;   // everything fits: left-aligned, no scrolling
-        return;
-        }
-
-    // Offset of the selected tab's centre from the start of the strip.
-    TInt centre = 0;
-    for (TInt i = 0; i < iSelected; ++i)
-        {
-        centre += TabWidth(i) + KTabGap;
-        }
-    centre += TabWidth(iSelected) / 2;
-
-    TInt scroll = centre - viewWidth / 2;
-    const TInt maxScroll = total - viewWidth;
-    if (scroll < 0)
-        {
-        scroll = 0;
-        }
-    else if (scroll > maxScroll)
-        {
-        scroll = maxScroll;
-        }
-    iScrollX = scroll;
-    }
-
-void CWunderlandTabBar::SizeChanged()
-    {
-    UpdateScroll();   // rotation / resolution change
+    const TRect r(Rect());
+    const TInt left = r.iTl.iX + r.Width() * aIndex / ETabCount;
+    const TInt right = r.iTl.iX + r.Width() * (aIndex + 1) / ETabCount;
+    return TRect(left, r.iTl.iY, right, r.iBr.iY - 1);   // above the bottom edge line
     }
 
 // ---------------------------------------------------------------------------
 // Input
 
+void CWunderlandTabBar::MoveFocusL(TInt aDelta)
+    {
+    TInt target = iFocused + aDelta;
+    if (target < 0)
+        {
+        target = 0;
+        }
+    else if (target >= ETabCount)
+        {
+        target = ETabCount - 1;
+        }
+    if (target != iFocused)
+        {
+        iFocused = target;
+        DrawDeferred();
+        ReportEventL(MCoeControlObserver::EEventStateChanged);
+        }
+    }
+
+void CWunderlandTabBar::ActivateFocusedL()
+    {
+    if (iActive != iFocused)
+        {
+        iActive = iFocused;
+        DrawDeferred();
+        ReportEventL(MCoeControlObserver::EEventStateChanged);
+        }
+    }
+
 TKeyResponse CWunderlandTabBar::OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode aType)
     {
-    if (aType != EEventKey)
+    if (aType != EEventKey || !iBarFocused)
         {
         return EKeyWasNotConsumed;
         }
     switch (aKeyEvent.iCode)
         {
         case EKeyLeftArrow:
-            MoveSelectionL(-1);
+            MoveFocusL(-1);
             return EKeyWasConsumed;
         case EKeyRightArrow:
-            MoveSelectionL(1);
+            MoveFocusL(1);
+            return EKeyWasConsumed;
+        case EKeyOK:
+        case EKeyEnter:
+            ActivateFocusedL();
             return EKeyWasConsumed;
         default:
             return EKeyWasNotConsumed;
@@ -241,23 +173,19 @@ void CWunderlandTabBar::HandlePointerEventL(const TPointerEvent& aPointerEvent)
         {
         return;
         }
-    const TPoint pos(aPointerEvent.iPosition);
-    if (LeftArrowRect().Contains(pos))
+    for (TInt i = 0; i < ETabCount; ++i)
         {
-        MoveSelectionL(-1);
-        return;
-        }
-    if (RightArrowRect().Contains(pos))
-        {
-        MoveSelectionL(1);
-        return;
-        }
-    const TInt count = Count();
-    for (TInt i = 0; i < count; ++i)
-        {
-        if (TabRect(i).Contains(pos))
+        if (TabRect(i).Contains(aPointerEvent.iPosition))
             {
-            MoveSelectionL(i - iSelected);
+            const TBool changed = !iBarFocused || iFocused != i || iActive != i;
+            iBarFocused = ETrue;
+            iFocused = i;
+            iActive = i;
+            if (changed)
+                {
+                DrawDeferred();
+                ReportEventL(MCoeControlObserver::EEventStateChanged);
+                }
             return;
             }
         }
@@ -266,27 +194,80 @@ void CWunderlandTabBar::HandlePointerEventL(const TPointerEvent& aPointerEvent)
 // ---------------------------------------------------------------------------
 // Drawing
 
-void CWunderlandTabBar::DrawArrow(CWindowGc& aGc, const TRect& aRect, TBool aLeft, TBool aEnabled) const
+// Icons are drawn as shapes so they scale with the bar on every resolution.
+void CWunderlandTabBar::DrawIcon(CWindowGc& aGc, TInt aTab, const TRect& aBox, const TRgb& aColour) const
     {
-    const TInt h = aRect.Height() / 4;            // half the triangle's height
-    const TInt w = h;                             // triangle depth
-    const TPoint c(aRect.Center());
-    TPoint pts[3];
-    if (aLeft)
+    const TInt s = aBox.Width();
+    const TInt cx = aBox.iTl.iX + s / 2;
+    const TInt top = aBox.iTl.iY;
+    const TInt bottom = aBox.iBr.iY;
+    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
+    aGc.SetPenColor(aColour);
+    aGc.SetBrushColor(aColour);
+
+    switch (aTab)
         {
-        pts[0] = TPoint(c.iX - w / 2, c.iY);
-        pts[1] = TPoint(c.iX + w / 2, c.iY - h);
-        pts[2] = TPoint(c.iX + w / 2, c.iY + h);
+        case ETabHome:
+            {
+            // Roof and walls as one polygon with the door cut out of the bottom
+            const TInt eaves = top + s * 9 / 20;
+            const TInt halfRoof = s / 2;
+            const TInt halfWall = s * 7 / 20;
+            const TInt halfDoor = s * 2 / 20 + 1;
+            const TInt doorTop = bottom - s * 6 / 20;
+            const TPoint pts[] =
+                {
+                TPoint(cx, top),
+                TPoint(cx + halfRoof, eaves),
+                TPoint(cx + halfWall, eaves),
+                TPoint(cx + halfWall, bottom),
+                TPoint(cx + halfDoor, bottom),
+                TPoint(cx + halfDoor, doorTop),
+                TPoint(cx - halfDoor, doorTop),
+                TPoint(cx - halfDoor, bottom),
+                TPoint(cx - halfWall, bottom),
+                TPoint(cx - halfWall, eaves),
+                TPoint(cx - halfRoof, eaves)
+                };
+            aGc.SetBrushStyle(CGraphicsContext::ESolidBrush);
+            aGc.DrawPolygon(pts, sizeof(pts) / sizeof(pts[0]));
+            break;
+            }
+        case ETabCategories:
+            {
+            // Three stacked bars
+            const TInt bar = s / 5 > 2 ? s / 5 : 2;
+            const TInt halfWidth = s * 9 / 20;
+            const TSize corner(bar / 2, bar / 2);
+            aGc.SetBrushStyle(CGraphicsContext::ESolidBrush);
+            for (TInt i = 0; i < 3; ++i)
+                {
+                const TInt y = top + (s - bar) * i / 2;
+                aGc.DrawRoundRect(TRect(cx - halfWidth, y, cx + halfWidth, y + bar), corner);
+                }
+            break;
+            }
+        case ETabSearch:
+            {
+            // Magnifying glass: ring in the upper left, handle to the lower right
+            const TInt pen = s / 9 > 2 ? s / 9 : 2;
+            const TInt d = s * 13 / 20;
+            const TRect ring(TPoint(aBox.iTl.iX + pen / 2, top + pen / 2), TSize(d, d));
+            aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
+            aGc.SetPenSize(TSize(pen, pen));
+            aGc.DrawEllipse(ring);
+            const TInt handle = pen * 3 / 2 + 1;
+            aGc.SetPenSize(TSize(handle, handle));
+            const TInt start = d * 85 / 100;   // just outside the ring on its diagonal
+            aGc.DrawLine(TPoint(ring.iTl.iX + start, ring.iTl.iY + start),
+                         TPoint(aBox.iBr.iX - handle / 2, bottom - handle / 2));
+            aGc.SetPenSize(TSize(1, 1));
+            break;
+            }
+        default:
+            break;
         }
-    else
-        {
-        pts[0] = TPoint(c.iX + w / 2, c.iY);
-        pts[1] = TPoint(c.iX - w / 2, c.iY - h);
-        pts[2] = TPoint(c.iX - w / 2, c.iY + h);
-        }
-    // 1 px drop shadow so the white arrow stands out on the light gloss
-    WunderlandDraw::FillTriangle(aGc, pts, aEnabled ? KArrowColor() : KArrowDimColor(),
-                                 aEnabled ? KArrowShadowColor() : KArrowDimColor());
+    aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
     }
 
 void CWunderlandTabBar::Draw(const TRect& /*aRect*/) const
@@ -294,51 +275,44 @@ void CWunderlandTabBar::Draw(const TRect& /*aRect*/) const
     CWindowGc& gc = SystemGc();
     const TRect rect(Rect());
 
-    // Background: glossy gradient, light upper half, base colour lower half
-    const TInt split = rect.iTl.iY + rect.Height() / 2;
-    FillGradient(gc, TRect(rect.iTl, TPoint(rect.iBr.iX, split)), KBarTopColor(), KBarMidHiColor());
-    FillGradient(gc, TRect(TPoint(rect.iTl.iX, split), rect.iBr), KBarMidLoColor(), KBarBottomColor());
-    gc.SetPenColor(KBarHighlightColor());
-    gc.DrawLine(rect.iTl, TPoint(rect.iBr.iX, rect.iTl.iY));
+    FillGradient(gc, rect, KBarTopColor(), KBarBottomColor());
     gc.SetPenColor(KBarShadeColor());
     gc.DrawLine(TPoint(rect.iTl.iX, rect.iBr.iY - 1), TPoint(rect.iBr.iX, rect.iBr.iY - 1));
 
-    const TInt count = Count();
-    DrawArrow(gc, LeftArrowRect(), ETrue, iSelected > 0);
-    DrawArrow(gc, RightArrowRect(), EFalse, iSelected < count - 1);
-
-    if (count == 0)
-        {
-        return;
-        }
-
-    // Tabs, clipped to the area between the arrows. Each tab is a square
-    // frame; the selected one is filled dark with white text.
-    const TRect view(Viewport());
-    gc.SetClippingRect(view);
-    const CFont* font = Font();
-    gc.UseFont(font);
-    for (TInt i = 0; i < count; ++i)
+    for (TInt i = 0; i < ETabCount; ++i)
         {
         const TRect tab(TabRect(i));
-        if (tab.iBr.iX <= view.iTl.iX || tab.iTl.iX >= view.iBr.iX)
+        const TBool focused = iBarFocused && i == iFocused;
+        if (focused)
             {
-            continue;   // fully scrolled out
+            FillGradient(gc, tab, KFocusTopColor(), KFocusBottomColor());
             }
-        const TBool selected = (i == iSelected);
-        if (selected)
+        else if (i > 0 && !(iBarFocused && i - 1 == iFocused))
             {
-            FillGradient(gc, tab, KSelTopColor(), KSelBottomColor());
+            // Engraved separator on the left edge (not next to the dark tab)
+            gc.SetPenColor(KSeparatorColor());
+            gc.DrawLine(TPoint(tab.iTl.iX, tab.iTl.iY + KSeparatorInset), TPoint(tab.iTl.iX, tab.iBr.iY));
+            gc.SetPenColor(KSeparatorHiColor());
+            gc.DrawLine(TPoint(tab.iTl.iX + 1, tab.iTl.iY + KSeparatorInset), TPoint(tab.iTl.iX + 1, tab.iBr.iY));
             }
 
-        gc.SetBrushStyle(CGraphicsContext::ENullBrush);   // outline only; DrawText(box) must not clear
-        gc.SetPenStyle(CGraphicsContext::ESolidPen);
-        gc.SetPenColor(selected ? KSelBorderColor() : KTabBorderColor());
-        gc.DrawRect(tab);
-        gc.SetPenColor(selected ? KSelTextColor() : KTabTextColor());
-        const TInt baseline = (tab.Height() + font->AscentInPixels() - font->DescentInPixels()) / 2;
-        gc.DrawText(iLabels->MdcaPoint(i), tab, baseline, CGraphicsContext::ECenter);
+        TInt size = tab.Height() * 11 / 20;
+        if (size > tab.Width() - 4)
+            {
+            size = tab.Width() - 4;
+            }
+        const TPoint c(tab.Center());
+        const TRect box(TPoint(c.iX - size / 2, c.iY - size / 2), TSize(size, size));
+        const TBool active = (i == iActive);
+        TRgb colour;
+        if (focused)
+            {
+            colour = active ? KIconFocusActiveColor() : KIconFocusColor();
+            }
+        else
+            {
+            colour = active ? KIconActiveColor() : KIconColor();
+            }
+        DrawIcon(gc, i, box, colour);
         }
-    gc.DiscardFont();
-    gc.CancelClippingRect();
     }
