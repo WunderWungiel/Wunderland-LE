@@ -14,7 +14,7 @@ class MWunderlandPage;
 // Main view: icon tab bar (Home / Categories / Search) on top, the page of
 // the active tab below it: the list of entries (sample data for now) on Home,
 // the content types on Categories, a blank page on Search (for now). While the tab bar has the d-pad
-// focus, a tooltip under the focused tab shows its name.
+// focus, a tooltip under the focused tab shows its name for a moment.
 class CWunderlandContainer : public CCoeControl, public MCoeControlObserver
     {
 public:
@@ -46,7 +46,11 @@ private:
     TRect ContentRect() const;    // below the tab bar
     void FocusTabBarL();          // takes the highlight off the list
     void FocusListL();            // first row; no-op on an empty list
-    void UpdateTooltipL();        // text, position, visibility
+    // Text, position, visibility. aRestart shows the tooltip again (focus
+    // moved to a tab); otherwise one that already timed out stays hidden.
+    void UpdateTooltipL(TBool aRestart = ETrue);
+    static TInt HideTooltipCallBack(TAny* aSelf);
+    void HideTooltip();
 
 private:
     // One store entry (sample data until the store has an API)
@@ -63,6 +67,7 @@ private:
     CWunderlandCategoryList* iCategoryList;   // owned
     CWunderlandSearchPage* iSearchPage;       // owned
     CWunderlandTooltip* iTooltip;    // owned
+    CPeriodic* iTooltipTimer;        // owned; hides the tooltip
     RArray<TApp> iApps;
     CDesCArrayFlat* iCategories;     // owned
     };

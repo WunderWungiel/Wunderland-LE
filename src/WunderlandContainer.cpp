@@ -16,6 +16,7 @@ namespace
     const TInt KContentTypes = 3;     // sample apps, games, themes
     const TInt KAppsPerType = 30;     // sample entries per content type
     const TInt KSampleSeed = 0x5EED;  // fixed: the same sample list on every start
+    const TInt KTooltipTimeout = 1000000;   // microseconds the tab tooltip stays up
 
     // Pseudo-random number in 0..aRange-1
     TInt Random(TInt64& aSeed, TInt aRange)
@@ -51,6 +52,7 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iSearchPage->SetObserver(this);
     iTooltip = CWunderlandTooltip::NewL(*this);
     iTooltip->MakeVisible(EFalse);
+    iTooltipTimer = CPeriodic::NewL(CActive::EPriorityStandard);
     iCategories = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
     EnableDragEvents();   // touch scrolling of the list
 
@@ -74,6 +76,11 @@ CWunderlandContainer::~CWunderlandContainer()
     {
     iApps.Close();
     delete iCategories;
+    if (iTooltipTimer)
+        {
+        iTooltipTimer->Cancel();
+        }
+    delete iTooltipTimer;
     delete iTooltip;
     delete iSearchPage;
     delete iCategoryList;
@@ -291,9 +298,9 @@ void CWunderlandContainer::FocusListL()
 
 // Right under the focused tab and as wide as it, text centred. Wider only if
 // the text doesn't fit; then centred on the tab and kept on screen.
-void CWunderlandContainer::UpdateTooltipL()
+void CWunderlandContainer::UpdateTooltipL(TBool aRestart)
     {
-    const TBool show = iTabBar->IsBarFocused();
+    const TBool show = iTabBar->IsBarFocused() && (aRestart || iTooltip->IsVisible());
     if (show)
         {
         iTooltip->SetTextL(iTabBar->FocusedLabel());
@@ -318,10 +325,32 @@ void CWunderlandContainer::UpdateTooltipL()
             }
         iTooltip->SetRect(TRect(TPoint(x, iTabBar->Rect().iBr.iY), size));
         }
+    iTooltipTimer->Cancel();
+    if (show && aRestart)
+        {
+        iTooltipTimer->Start(KTooltipTimeout, KTooltipTimeout,
+                             TCallBack(CWunderlandContainer::HideTooltipCallBack, this));
+        }
     if (show || iTooltip->IsVisible())
         {
         iTooltip->MakeVisible(show);
         DrawDeferred();   // repaints the list where the tooltip was
+        }
+    }
+
+TInt CWunderlandContainer::HideTooltipCallBack(TAny* aSelf)
+    {
+    static_cast<CWunderlandContainer*>(aSelf)->HideTooltip();
+    return EFalse;
+    }
+
+void CWunderlandContainer::HideTooltip()
+    {
+    iTooltipTimer->Cancel();   // CPeriodic repeats; one tick is enough
+    if (iTooltip->IsVisible())
+        {
+        iTooltip->MakeVisible(EFalse);
+        DrawDeferred();
         }
     }
 
@@ -336,7 +365,7 @@ void CWunderlandContainer::SizeChanged()
     iAppList->SetRect(ContentRect());
     iCategoryList->SetRect(ContentRect());
     iSearchPage->SetRect(ContentRect());
-    TRAP_IGNORE(UpdateTooltipL());   // only leaves on OOM; the old tooltip stays
+    TRAP_IGNORE(UpdateTooltipL(EFalse));   // only leaves on OOM; the old tooltip stays
     }
 
 void CWunderlandContainer::HandleResourceChange(TInt aType)
