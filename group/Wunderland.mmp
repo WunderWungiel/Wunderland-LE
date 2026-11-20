@@ -21,7 +21,9 @@ SOURCE            WunderlandTabBar.cpp
 SOURCE            WunderlandTooltip.cpp
 SOURCE            WunderlandAppList.cpp
 SOURCE            WunderlandCategoryList.cpp
+SOURCE            WunderlandSearchBar.cpp
 SOURCE            WunderlandSearchPage.cpp
+SOURCE            WunderlandSearchResultsPage.cpp
 SOURCE            WunderlandContentTypePage.cpp
 SOURCE            WunderlandDrawUtils.cpp
 
@@ -50,3 +52,4 @@ SYSTEMINCLUDE     \epoc32\include\platform \epoc32\include\app \epoc32\include\p
 
 LIBRARY           euser.lib apparc.lib cone.lib eikcore.lib avkon.lib
 LIBRARY           eikcoctl.lib gdi.lib ws32.lib bafl.lib fbscli.lib aknicon.lib
+LIBRARY           etext.lib egul.lib // search field: CCharFormatLayer, TMargins8

@@ -43,7 +43,6 @@ private:
     CWunderlandContentTypePage();
     void ConstructL(const CCoeControl& aParent);
 
-    const CFont* HeaderFont() const;
     const CFont* RowFont() const;
     TRect HeaderRect() const;
     TRect ListRect() const;          // below the header
@@ -56,7 +55,6 @@ private:
     void SetScroll(TInt aScrollY);            // clamps
     void EnsureVisible(TInt aIndex);
 
-    void DrawHeader(CWindowGc& aGc) const;
     void DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& aRow, TInt aRadius) const;
     void DrawScrollBar(CWindowGc& aGc) const;
 

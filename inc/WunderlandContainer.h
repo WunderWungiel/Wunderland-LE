@@ -3,6 +3,7 @@
 
 #include <coecntrl.h>
 #include <badesca.h>
+#include "WunderlandSearchBar.h"
 
 class CWunderlandTabBar;
 class CWunderlandTooltip;
@@ -10,22 +11,25 @@ class CWunderlandAppList;
 class CWunderlandCategoryList;
 class CWunderlandSearchPage;
 class CWunderlandContentTypePage;
+class CWunderlandSearchResultsPage;
 class MWunderlandPage;
 
 // Main view: icon tab bar (Home / Categories / Search) on top, the page of
 // the active tab below it: the list of entries (sample data for now) on Home,
-// the content types on Categories, a blank page on Search (for now). While the tab bar has the d-pad
-// focus, a tooltip under the focused tab shows its name for a moment.
-// Selecting a content type on Categories opens its page over the whole view
-// (no tab bar) with "Store menu" / "Back" softkeys; Back returns here.
-class CWunderlandContainer : public CCoeControl, public MCoeControlObserver
+// the content types on Categories, the search bar on Search. While the tab
+// bar has the d-pad focus, a tooltip under the focused tab shows its name for
+// a moment.
+// Two pages can cover the whole view (no tab bar), with "Store menu" / "Back"
+// softkeys: a content type selected on Categories, and the search results
+// after a search. Back returns to the tab they were opened from.
+class CWunderlandContainer : public CCoeControl, public MCoeControlObserver,
+                             public MWunderlandSearchObserver
     {
 public:
     static CWunderlandContainer* NewL(const TRect& aRect);
     ~CWunderlandContainer();
 
-    TBool IsContentTypeOpen() const;
-    void CloseContentTypeL();   // back to the Categories tab
+    void HandleBackL();   // closes the full-screen page, if any
 
 public: // from CCoeControl
     TKeyResponse OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode aType);
@@ -37,6 +41,8 @@ private: // from CCoeControl
     CCoeControl* ComponentControl(TInt aIndex) const;
 private: // from MCoeControlObserver
     void HandleControlEventL(CCoeControl* aControl, TCoeEvent aEventType);
+private: // from MWunderlandSearchObserver
+    void HandleSearchL(const TDesC& aQuery);
 private:
     CWunderlandContainer();
     void ConstructL(const TRect& aRect);
@@ -44,12 +50,17 @@ private:
     void AddSampleCategoriesL();
     void AddSampleAppsL();
     void UpdateAppListL();
+    void AppendAppL(CWunderlandAppList& aList, TInt aIndex) const;   // index into iApps
+    void UpdateSearchResultsL(const TDesC& aQuery);
     void AddContentTypesL();
 
     MWunderlandPage& Page() const;      // of the active tab
     CCoeControl* PageControl() const;   // the same object as a control
     void UpdatePage();                  // after the active tab changed
     void OpenContentTypeL(TInt aType);  // index into iContentTypes
+    void CloseContentTypeL();           // back to the Categories tab
+    void OpenSearchResultsL(const TDesC& aQuery);
+    void CloseSearchResultsL();         // back to the Search tab
     static void SetSoftkeysL(TInt aResourceId);
 
     TRect ContentRect() const;    // below the tab bar
@@ -77,6 +88,14 @@ private:
     CWunderlandCategoryList* iCategoryList;   // owned
     CWunderlandSearchPage* iSearchPage;       // owned
     CWunderlandContentTypePage* iContentTypePage;   // owned
+    CWunderlandSearchResultsPage* iResultsPage;     // owned
+    enum TOverlay
+        {
+        EOverlayNone,
+        EOverlayContentType,
+        EOverlaySearchResults
+        };
+    TOverlay iOverlay;               // full-screen page over the tabs, if any
     TInt iOpenType;                  // content type shown on iContentTypePage; -1: none
     CWunderlandTooltip* iTooltip;    // owned
     CPeriodic* iTooltipTimer;        // owned; hides the tooltip

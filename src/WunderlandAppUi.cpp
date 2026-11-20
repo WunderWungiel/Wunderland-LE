@@ -36,8 +36,8 @@ void CWunderlandAppUi::HandleCommandL(TInt aCommand)
         case EAknSoftkeyExit:
             Exit();
             break;
-        case EAknSoftkeyBack:   // content type page
-            iContainer->CloseContentTypeL();
+        case EAknSoftkeyBack:   // content type page, search results
+            iContainer->HandleBackL();
             break;
         default:
             break;

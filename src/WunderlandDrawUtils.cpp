@@ -1,3 +1,4 @@
+#include <aknutils.h>
 #include <w32std.h>
 #include "WunderlandDrawUtils.h"
 
@@ -67,4 +68,50 @@ void WunderlandDraw::FillRoundGradient(CWindowGc& aGc, const TRect& aRect, const
         aGc.SetPenColor(Blend(aTop, aBottom, row, h > 1 ? h - 1 : 1));
         aGc.DrawLine(TPoint(aRect.iTl.iX + inset, y), TPoint(aRect.iBr.iX - inset, y));
         }
+    }
+
+namespace
+    {
+    const TInt KHeaderVPad = 8;        // above/below the title
+    const TInt KHeaderTextInset = 16;  // lines up with the row text of the pages below
+    const TInt KMaxTitle = 64;
+
+    const TRgb KHeaderTopColor()     { return TRgb(0xF2, 0xF3, 0xF4); }
+    const TRgb KHeaderBottomColor()  { return TRgb(0xD6, 0xD9, 0xDC); }
+    const TRgb KHeaderShadeColor()   { return TRgb(0xB4, 0xB8, 0xBE); }   // bottom edge
+    const TRgb KHeaderTextColor()    { return TRgb(0x3A, 0x3D, 0x40); }
+
+    const CFont* HeaderFont()
+        {
+        return AknLayoutUtils::FontFromId(EAknLogicalFontPrimaryFont);
+        }
+    }
+
+TInt WunderlandDraw::PageHeaderHeight()
+    {
+    return KHeaderVPad + HeaderFont()->HeightInPixels() + KHeaderVPad;
+    }
+
+void WunderlandDraw::DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TDesC& aTitle)
+    {
+    FillGradient(aGc, TRect(aRect.iTl, TPoint(aRect.iBr.iX, aRect.iBr.iY - 1)),
+                 KHeaderTopColor(), KHeaderBottomColor());
+    aGc.SetPenColor(KHeaderShadeColor());
+    aGc.DrawLine(TPoint(aRect.iTl.iX, aRect.iBr.iY - 1), TPoint(aRect.iBr.iX, aRect.iBr.iY - 1));
+
+    const TInt width = aRect.Width() - 2 * KHeaderTextInset;
+    if (width <= 0)
+        {
+        return;
+        }
+    const CFont* font = HeaderFont();
+    TBuf<KMaxTitle> text(aTitle.Left(KMaxTitle));
+    AknTextUtils::ClipToFit(text, *font, width);
+    aGc.UseFont(font);
+    aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
+    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
+    aGc.SetPenColor(KHeaderTextColor());
+    aGc.DrawText(text, TPoint(aRect.iTl.iX + KHeaderTextInset,
+                              aRect.iTl.iY + KHeaderVPad + font->AscentInPixels()));
+    aGc.DiscardFont();
     }

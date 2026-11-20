@@ -5,14 +5,12 @@
 #include "WunderlandContentTypePage.h"
 #include "WunderlandDrawUtils.h"
 
-using WunderlandDraw::FillGradient;
 using WunderlandDraw::FillRoundGradient;
 
 namespace
     {
     const TInt KItemGranularity = 16;
     const TInt KMargin = 6;            // page edges to the rows, header text inset
-    const TInt KHeaderVPad = 8;        // above/below the header text
     const TInt KGroupGap = 10;         // above and below "See all"
     const TInt KRowVPad = 14;          // above/below the row text: thick rows
     const TInt KMinRowHeight = 44;     // rows double as touch targets
@@ -27,10 +25,6 @@ namespace
     _LIT(KChevron, "\x00BB");          // »
 
     const TRgb KBackgroundColor()    { return KRgbWhite; }
-    const TRgb KHeaderTopColor()     { return TRgb(0xF2, 0xF3, 0xF4); }
-    const TRgb KHeaderBottomColor()  { return TRgb(0xD6, 0xD9, 0xDC); }
-    const TRgb KHeaderShadeColor()   { return TRgb(0xB4, 0xB8, 0xBE); }   // bottom edge
-    const TRgb KHeaderTextColor()    { return TRgb(0x3A, 0x3D, 0x40); }
     // Rows: the same look as on the Categories page
     const TRgb KRowTopColor()        { return KRgbWhite; }
     const TRgb KRowBottomColor()     { return TRgb(0xEA, 0xEC, 0xEF); }
@@ -131,11 +125,6 @@ TBool CWunderlandContentTypePage::MoveHighlight(TInt aDelta)
 // ---------------------------------------------------------------------------
 // Geometry
 
-const CFont* CWunderlandContentTypePage::HeaderFont() const
-    {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontPrimaryFont);
-    }
-
 const CFont* CWunderlandContentTypePage::RowFont() const
     {
     return AknLayoutUtils::FontFromId(EAknLogicalFontPrimarySmallFont);
@@ -144,7 +133,7 @@ const CFont* CWunderlandContentTypePage::RowFont() const
 TRect CWunderlandContentTypePage::HeaderRect() const
     {
     const TRect rect(Rect());
-    return TRect(rect.iTl, TSize(rect.Width(), KHeaderVPad + HeaderFont()->HeightInPixels() + KHeaderVPad));
+    return TRect(rect.iTl, TSize(rect.Width(), WunderlandDraw::PageHeaderHeight()));
     }
 
 TRect CWunderlandContentTypePage::ListRect() const
@@ -345,33 +334,7 @@ void CWunderlandContentTypePage::Draw(const TRect& /*aRect*/) const
         }
     gc.CancelClippingRect();
 
-    DrawHeader(gc);
-    }
-
-void CWunderlandContentTypePage::DrawHeader(CWindowGc& aGc) const
-    {
-    const TRect header(HeaderRect());
-    FillGradient(aGc, TRect(header.iTl, TPoint(header.iBr.iX, header.iBr.iY - 1)),
-                 KHeaderTopColor(), KHeaderBottomColor());
-    aGc.SetPenColor(KHeaderShadeColor());
-    aGc.DrawLine(TPoint(header.iTl.iX, header.iBr.iY - 1), TPoint(header.iBr.iX, header.iBr.iY - 1));
-
-    const CFont* font = HeaderFont();
-    TBuf<32> text(iTitle);
-    const TInt width = header.Width() - 2 * (KMargin + KRowTextPad);
-    if (width <= 0)
-        {
-        return;
-        }
-    AknTextUtils::ClipToFit(text, *font, width);
-    aGc.UseFont(font);
-    aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
-    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
-    aGc.SetPenColor(KHeaderTextColor());
-    // Left-aligned with the row text below
-    aGc.DrawText(text, TPoint(header.iTl.iX + KMargin + KRowTextPad,
-                              header.iTl.iY + KHeaderVPad + font->AscentInPixels()));
-    aGc.DiscardFont();
+    WunderlandDraw::DrawPageHeader(gc, HeaderRect(), iTitle);
     }
 
 void CWunderlandContentTypePage::DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& aRow,

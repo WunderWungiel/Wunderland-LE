@@ -18,6 +18,12 @@ namespace WunderlandDraw
     // Like FillGradient, with corners rounded to aRadius pixels (no anti-aliasing).
     void FillRoundGradient(CWindowGc& aGc, const TRect& aRect, const TRgb& aTop, const TRgb& aBottom,
                            TInt aRadius);
+
+    // Title bar of a full-screen page (content type, search results): light
+    // grey gradient, a darker bottom line, the title left-aligned in the
+    // primary font. Height follows the font, so it changes with the layout.
+    TInt PageHeaderHeight();
+    void DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TDesC& aTitle);
     }
 
 #endif // __WUNDERLANDDRAWUTILS_H__

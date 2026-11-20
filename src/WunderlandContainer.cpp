@@ -11,6 +11,7 @@
 #include "WunderlandContentTypePage.h"
 #include "WunderlandLE_0xE4F76EAD.rsg"
 #include "WunderlandSearchPage.h"
+#include "WunderlandSearchResultsPage.h"
 #include "WunderlandTabBar.h"
 #include "WunderlandTooltip.h"
 
@@ -21,6 +22,7 @@ namespace
     const TInt KAppsPerType = 30;     // sample entries per content type
     const TInt KSampleSeed = 0x5EED;  // fixed: the same sample list on every start
     const TInt KTooltipTimeout = 1000000;   // microseconds the tab tooltip stays up
+    const TInt KSampleResultStep = 5;       // every 5th entry is a sample search result
 
     // Pseudo-random number in 0..aRange-1
     TInt Random(TInt64& aSeed, TInt aRange)
@@ -39,7 +41,7 @@ CWunderlandContainer* CWunderlandContainer::NewL(const TRect& aRect)
     }
 
 CWunderlandContainer::CWunderlandContainer()
-    : iOpenType(-1)
+    : iOverlay(EOverlayNone), iOpenType(-1)
     {
     }
 
@@ -53,11 +55,13 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iAppList->SetObserver(this);
     iCategoryList = CWunderlandCategoryList::NewL(*this);
     iCategoryList->SetObserver(this);
-    iSearchPage = CWunderlandSearchPage::NewL(*this);
+    iSearchPage = CWunderlandSearchPage::NewL(*this, *this);
     iSearchPage->SetObserver(this);
     iContentTypePage = CWunderlandContentTypePage::NewL(*this);
     iContentTypePage->SetObserver(this);
     iContentTypePage->MakeVisible(EFalse);
+    iResultsPage = CWunderlandSearchResultsPage::NewL(*this, *this);
+    iResultsPage->MakeVisible(EFalse);
     iTooltip = CWunderlandTooltip::NewL(*this);
     iTooltip->MakeVisible(EFalse);
     iTooltipTimer = CPeriodic::NewL(CActive::EPriorityStandard);
@@ -79,6 +83,7 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iCategoryList->ActivateL();
     iSearchPage->ActivateL();
     iContentTypePage->ActivateL();
+    iResultsPage->ActivateL();
     }
 
 CWunderlandContainer::~CWunderlandContainer()
@@ -92,6 +97,7 @@ CWunderlandContainer::~CWunderlandContainer()
         }
     delete iTooltipTimer;
     delete iTooltip;
+    delete iResultsPage;
     delete iContentTypePage;
     delete iSearchPage;
     delete iCategoryList;
@@ -216,21 +222,41 @@ void CWunderlandContainer::AddSampleAppsL()
     #undef WUNDERLAND_COUNT
     }
 
-// Every entry, with its category under the name (the Home page).
+// Every entry (the Home page).
 void CWunderlandContainer::UpdateAppListL()
     {
     iAppList->Reset();
     const TInt count = iApps.Count();
     for (TInt i = 0; i < count; ++i)
         {
-        const TApp& app = iApps[i];
-        TPtrC subtitle(KNullDesC);
-        if (app.iType >= 0 && app.iType < iCategories.Count()
-            && app.iCategory >= 0 && app.iCategory < iCategories[app.iType]->MdcaCount())
-            {
-            subtitle.Set(iCategories[app.iType]->MdcaPoint(app.iCategory));
-            }
-        iAppList->AppendL(app.iName, subtitle, app.iRating);
+        AppendAppL(*iAppList, i);
+        }
+    }
+
+// One row: the entry's name, its category under it, its rating.
+void CWunderlandContainer::AppendAppL(CWunderlandAppList& aList, TInt aIndex) const
+    {
+    const TApp& app = iApps[aIndex];
+    TPtrC subtitle(KNullDesC);
+    if (app.iType >= 0 && app.iType < iCategories.Count()
+        && app.iCategory >= 0 && app.iCategory < iCategories[app.iType]->MdcaCount())
+        {
+        subtitle.Set(iCategories[app.iType]->MdcaPoint(app.iCategory));
+        }
+    aList.AppendL(app.iName, subtitle, app.iRating);
+    }
+
+// The same fixed sample results for any query: every few entries, from all
+// content types.
+// TODO: ask the store API for aQuery once there is one.
+void CWunderlandContainer::UpdateSearchResultsL(const TDesC& /*aQuery*/)
+    {
+    CWunderlandAppList& list = iResultsPage->List();
+    list.Reset();
+    const TInt count = iApps.Count();
+    for (TInt i = 0; i < count; i += KSampleResultStep)
+        {
+        AppendAppL(list, i);
         }
     }
 
@@ -252,9 +278,19 @@ void CWunderlandContainer::AddContentTypesL()
         }
     }
 
-TBool CWunderlandContainer::IsContentTypeOpen() const
+void CWunderlandContainer::HandleBackL()
     {
-    return iOpenType >= 0;
+    switch (iOverlay)
+        {
+        case EOverlayContentType:
+            CloseContentTypeL();
+            break;
+        case EOverlaySearchResults:
+            CloseSearchResultsL();
+            break;
+        default:
+            break;
+        }
     }
 
 // Covers the tab bar and the tab pages; the Categories tab stays active
@@ -267,6 +303,7 @@ void CWunderlandContainer::OpenContentTypeL(TInt aType)
         }
     iContentTypePage->SetContentL(iContentTypes->MdcaPoint(aType), *iCategories[aType]);
     SetSoftkeysL(R_WUNDERLAND_SOFTKEYS_STOREMENU_BACK);
+    iOverlay = EOverlayContentType;
     iOpenType = aType;
     HideTooltip();
     iContentTypePage->MakeVisible(ETrue);
@@ -276,7 +313,7 @@ void CWunderlandContainer::OpenContentTypeL(TInt aType)
 
 void CWunderlandContainer::CloseContentTypeL()
     {
-    if (iOpenType < 0)
+    if (iOverlay != EOverlayContentType)
         {
         return;
         }
@@ -285,7 +322,56 @@ void CWunderlandContainer::CloseContentTypeL()
     iContentTypePage->MakeVisible(EFalse);
     iTabBar->SetBarFocused(EFalse);
     iCategoryList->SetHighlighted(iOpenType);
+    iOverlay = EOverlayNone;
     iOpenType = -1;
+    DrawDeferred();
+    }
+
+// From the Search tab or from the results page itself (a new search).
+// Empty queries are ignored.
+void CWunderlandContainer::HandleSearchL(const TDesC& aQuery)
+    {
+    TBuf<KWunderlandMaxQuery> query(aQuery.Left(KWunderlandMaxQuery));
+    query.Trim();
+    if (query.Length() == 0)
+        {
+        return;
+        }
+    OpenSearchResultsL(query);
+    }
+
+// Covers the tab bar and the tab pages; the Search tab stays active
+// underneath, ready for Back. Both search bars keep the last query.
+void CWunderlandContainer::OpenSearchResultsL(const TDesC& aQuery)
+    {
+    iSearchPage->SetQueryL(aQuery);
+    iResultsPage->SetQueryL(aQuery);
+    UpdateSearchResultsL(aQuery);
+    if (iOverlay != EOverlaySearchResults)
+        {
+        iSearchPage->SetHighlighted(-1);   // only one editor may have the focus
+        SetSoftkeysL(R_WUNDERLAND_SOFTKEYS_STOREMENU_BACK);
+        iOverlay = EOverlaySearchResults;
+        HideTooltip();
+        iResultsPage->MakeVisible(ETrue);
+        }
+    // First result, or the search bar when there are none
+    iResultsPage->SetHighlighted(iResultsPage->Count() > 1 ? 1 : 0);
+    DrawDeferred();
+    }
+
+void CWunderlandContainer::CloseSearchResultsL()
+    {
+    if (iOverlay != EOverlaySearchResults)
+        {
+        return;
+        }
+    SetSoftkeysL(R_AVKON_SOFTKEYS_OPTIONS_EXIT);
+    iResultsPage->SetHighlighted(-1);
+    iResultsPage->MakeVisible(EFalse);
+    iOverlay = EOverlayNone;
+    iTabBar->SetBarFocused(EFalse);
+    iSearchPage->SetHighlighted(0);   // back in the field
     DrawDeferred();
     }
 
@@ -441,7 +527,8 @@ void CWunderlandContainer::SizeChanged()
     iAppList->SetRect(ContentRect());
     iCategoryList->SetRect(ContentRect());
     iSearchPage->SetRect(ContentRect());
-    iContentTypePage->SetRect(rect);   // no tab bar over it
+    iContentTypePage->SetRect(rect);   // no tab bar over them
+    iResultsPage->SetRect(rect);
     TRAP_IGNORE(UpdateTooltipL(EFalse));   // only leaves on OOM; the old tooltip stays
     }
 
@@ -461,14 +548,22 @@ TInt CWunderlandContainer::CountComponentControls() const
         {
         return 0;
         }
-    return iOpenType >= 0 ? 1 : 3;   // a content type page covers everything
+    return iOverlay != EOverlayNone ? 1 : 3;   // a full-screen page covers everything
     }
 
 CCoeControl* CWunderlandContainer::ComponentControl(TInt aIndex) const
     {
-    if (iOpenType >= 0)
+    if (iOverlay != EOverlayNone)
         {
-        return aIndex == 0 ? iContentTypePage : NULL;
+        if (aIndex != 0)
+            {
+            return NULL;
+            }
+        if (iOverlay == EOverlayContentType)
+            {
+            return iContentTypePage;
+            }
+        return iResultsPage;
         }
     switch (aIndex)
         {
@@ -529,11 +624,49 @@ void CWunderlandContainer::Draw(const TRect& /*aRect*/) const
 
 TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TEventCode aType)
     {
+    // A focused search bar gets the keys first (text, cursor, Go); it leaves
+    // Up/Down and the keys at its edges to the navigation below.
+    CCoeControl* searchPage = NULL;
+    if (iOverlay == EOverlaySearchResults)
+        {
+        searchPage = iResultsPage;
+        }
+    else if (iOverlay == EOverlayNone && iTabBar->Active() == CWunderlandTabBar::ETabSearch
+             && !iTabBar->IsBarFocused())
+        {
+        searchPage = iSearchPage;
+        }
+    if (searchPage && searchPage->OfferKeyEventL(aKeyEvent, aType) == EKeyWasConsumed)
+        {
+        return EKeyWasConsumed;
+        }
     if (aType != EEventKey)
         {
         return EKeyWasNotConsumed;
         }
-    if (iOpenType >= 0)
+    if (iOverlay == EOverlaySearchResults)
+        {
+        // Up/down through the bar and the results; Back is the right softkey.
+        // TODO: OK opens the highlighted entry.
+        switch (aKeyEvent.iCode)
+            {
+            case EKeyDownArrow:
+            case EKeyUpArrow:
+                if (iResultsPage->Highlighted() < 0)
+                    {
+                    iResultsPage->SetHighlighted(0);
+                    }
+                else
+                    {
+                    // No wrapping: stays on the bar / the last result
+                    iResultsPage->MoveHighlight(aKeyEvent.iCode == EKeyDownArrow ? 1 : -1);
+                    }
+                return EKeyWasConsumed;
+            default:
+                return EKeyWasNotConsumed;
+            }
+        }
+    if (iOverlay == EOverlayContentType)
         {
         // Content type page: up/down only; Back is the right softkey.
         // TODO: OK opens the highlighted category's entries.
@@ -573,7 +706,7 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
         return response;
         }
     // In the page content, left/right switch tabs (S60 tab convention). Controls
-    // that need these keys themselves (a future Search editor, an open category
+    // that need these keys themselves (the search bar above, a future category
     // drop-down) must be offered the key before this point and get to keep it.
     switch (aKeyEvent.iCode)
         {
