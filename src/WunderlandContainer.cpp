@@ -1,11 +1,15 @@
 #include <akndef.h>
 #include <avkon.hrh>
+#include <avkon.rsg>
+#include <eikbtgpc.h>
 #include <eikon.hrh>
 #include <e32math.h>
 #include <gdi.h>
 #include "WunderlandAppList.h"
 #include "WunderlandCategoryList.h"
 #include "WunderlandContainer.h"
+#include "WunderlandContentTypePage.h"
+#include "WunderlandLE_0xE4F76EAD.rsg"
 #include "WunderlandSearchPage.h"
 #include "WunderlandTabBar.h"
 #include "WunderlandTooltip.h"
@@ -13,7 +17,7 @@
 namespace
     {
     const TInt KCategoryGranularity = 16;
-    const TInt KContentTypes = 3;     // sample apps, games, themes
+    const TInt KContentTypes = 3;     // apps, games, themes
     const TInt KAppsPerType = 30;     // sample entries per content type
     const TInt KSampleSeed = 0x5EED;  // fixed: the same sample list on every start
     const TInt KTooltipTimeout = 1000000;   // microseconds the tab tooltip stays up
@@ -35,6 +39,7 @@ CWunderlandContainer* CWunderlandContainer::NewL(const TRect& aRect)
     }
 
 CWunderlandContainer::CWunderlandContainer()
+    : iOpenType(-1)
     {
     }
 
@@ -50,16 +55,19 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iCategoryList->SetObserver(this);
     iSearchPage = CWunderlandSearchPage::NewL(*this);
     iSearchPage->SetObserver(this);
+    iContentTypePage = CWunderlandContentTypePage::NewL(*this);
+    iContentTypePage->SetObserver(this);
+    iContentTypePage->MakeVisible(EFalse);
     iTooltip = CWunderlandTooltip::NewL(*this);
     iTooltip->MakeVisible(EFalse);
     iTooltipTimer = CPeriodic::NewL(CActive::EPriorityStandard);
-    iCategories = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
+    iContentTypes = new (ELeave) CDesCArrayFlat(KContentTypes);
     EnableDragEvents();   // touch scrolling of the list
 
+    AddContentTypesL();
     AddSampleCategoriesL();
     AddSampleAppsL();
     UpdateAppListL();
-    AddContentTypesL();
     UpdatePage();
 
     SetRect(aRect);   // lays out the children via SizeChanged()
@@ -70,50 +78,64 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iAppList->ActivateL();
     iCategoryList->ActivateL();
     iSearchPage->ActivateL();
+    iContentTypePage->ActivateL();
     }
 
 CWunderlandContainer::~CWunderlandContainer()
     {
     iApps.Close();
-    delete iCategories;
+    iCategories.ResetAndDestroy();
+    delete iContentTypes;
     if (iTooltipTimer)
         {
         iTooltipTimer->Cancel();
         }
     delete iTooltipTimer;
     delete iTooltip;
+    delete iContentTypePage;
     delete iSearchPage;
     delete iCategoryList;
     delete iAppList;
     delete iTabBar;
     }
 
+// One category list per content type, in the order of iContentTypes.
+// TODO: fetch the categories from the store API once there is one.
 void CWunderlandContainer::AddSampleCategoriesL()
     {
-    _LIT(KCat1,  "Camera, photos, videos");
-    _LIT(KCat2,  "Emulator");
-    _LIT(KCat3,  "Business");
-    _LIT(KCat4,  "Communication");
-    _LIT(KCat5,  "Entertainment");
-    _LIT(KCat6,  "Maps & navigation");
-    _LIT(KCat7,  "Music & audio");
-    _LIT(KCat8,  "News & weather");
-    _LIT(KCat9,  "Productivity");
-    _LIT(KCat10, "Social networks");
-    _LIT(KCat11, "Tools & utilities");
-    _LIT(KCat12, "Travel");
-    iCategories->AppendL(KCat1);
-    iCategories->AppendL(KCat2);
-    iCategories->AppendL(KCat3);
-    iCategories->AppendL(KCat4);
-    iCategories->AppendL(KCat5);
-    iCategories->AppendL(KCat6);
-    iCategories->AppendL(KCat7);
-    iCategories->AppendL(KCat8);
-    iCategories->AppendL(KCat9);
-    iCategories->AppendL(KCat10);
-    iCategories->AppendL(KCat11);
-    iCategories->AppendL(KCat12);
+    const TText* const apps[] =
+        {
+        _S("Camera, photos, videos"), _S("Emulator"), _S("Business"), _S("Communication"),
+        _S("Entertainment"), _S("Maps & navigation"), _S("Music & audio"), _S("News & weather"),
+        _S("Productivity"), _S("Social networks"), _S("Tools & utilities"), _S("Travel")
+        };
+    const TText* const games[] =
+        {
+        _S("Action"), _S("Adventure"), _S("Arcade"), _S("Board"), _S("Card & casino"),
+        _S("Educational"), _S("Puzzle"), _S("Racing"), _S("Sports"), _S("Strategy")
+        };
+    const TText* const themes[] =
+        {
+        _S("Abstract"), _S("Animals"), _S("Cartoons"), _S("Holidays"), _S("Nature"),
+        _S("Sports"), _S("Technology")
+        };
+    #define WUNDERLAND_COUNT(a) (static_cast<TInt>(sizeof(a) / sizeof((a)[0])))
+    AddCategoriesL(apps, WUNDERLAND_COUNT(apps));
+    AddCategoriesL(games, WUNDERLAND_COUNT(games));
+    AddCategoriesL(themes, WUNDERLAND_COUNT(themes));
+    #undef WUNDERLAND_COUNT
+    }
+
+void CWunderlandContainer::AddCategoriesL(const TText* const* aNames, TInt aCount)
+    {
+    CDesCArrayFlat* list = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
+    CleanupStack::PushL(list);
+    for (TInt i = 0; i < aCount; ++i)
+        {
+        list->AppendL(TPtrC(aNames[i]));
+        }
+    iCategories.AppendL(list);
+    CleanupStack::Pop(list);
     }
 
 // Random names, categories and ratings, generated from a fixed seed.
@@ -152,9 +174,9 @@ void CWunderlandContainer::AddSampleAppsL()
     #define WUNDERLAND_COUNT(a) (static_cast<TInt>(sizeof(a) / sizeof((a)[0])))
 
     TInt64 seed = KSampleSeed;
-    const TInt categories = iCategories->MdcaCount();
     for (TInt type = 0; type < KContentTypes; ++type)
         {
+        const TInt categories = iCategories[type]->MdcaCount();
         const TText* const* first;
         const TText* const* second;
         TInt firstCount;
@@ -185,6 +207,7 @@ void CWunderlandContainer::AddSampleAppsL()
                 app.iName.Append(' ');
                 app.iName.Append(secondWord);
                 }
+            app.iType = type;
             app.iCategory = categories > 0 ? Random(seed, categories) : 0;
             app.iRating = 1 + Random(seed, 5);
             iApps.AppendL(app);
@@ -197,15 +220,15 @@ void CWunderlandContainer::AddSampleAppsL()
 void CWunderlandContainer::UpdateAppListL()
     {
     iAppList->Reset();
-    const TInt categories = iCategories->MdcaCount();
     const TInt count = iApps.Count();
     for (TInt i = 0; i < count; ++i)
         {
         const TApp& app = iApps[i];
         TPtrC subtitle(KNullDesC);
-        if (app.iCategory >= 0 && app.iCategory < categories)
+        if (app.iType >= 0 && app.iType < iCategories.Count()
+            && app.iCategory >= 0 && app.iCategory < iCategories[app.iType]->MdcaCount())
             {
-            subtitle.Set(iCategories->MdcaPoint(app.iCategory));
+            subtitle.Set(iCategories[app.iType]->MdcaPoint(app.iCategory));
             }
         iAppList->AppendL(app.iName, subtitle, app.iRating);
         }
@@ -217,10 +240,63 @@ void CWunderlandContainer::AddContentTypesL()
     _LIT(KTypeApps,   "Apps");
     _LIT(KTypeGames,  "Games");
     _LIT(KTypeThemes, "Themes");
+    iContentTypes->Reset();
+    iContentTypes->AppendL(KTypeApps);
+    iContentTypes->AppendL(KTypeGames);
+    iContentTypes->AppendL(KTypeThemes);
     iCategoryList->Reset();
-    iCategoryList->AppendL(KTypeApps);
-    iCategoryList->AppendL(KTypeGames);
-    iCategoryList->AppendL(KTypeThemes);
+    const TInt count = iContentTypes->MdcaCount();
+    for (TInt i = 0; i < count; ++i)
+        {
+        iCategoryList->AppendL(iContentTypes->MdcaPoint(i));
+        }
+    }
+
+TBool CWunderlandContainer::IsContentTypeOpen() const
+    {
+    return iOpenType >= 0;
+    }
+
+// Covers the tab bar and the tab pages; the Categories tab stays active
+// underneath with the opened row highlighted, ready for Back.
+void CWunderlandContainer::OpenContentTypeL(TInt aType)
+    {
+    if (aType < 0 || aType >= iContentTypes->MdcaCount() || aType >= iCategories.Count())
+        {
+        return;
+        }
+    iContentTypePage->SetContentL(iContentTypes->MdcaPoint(aType), *iCategories[aType]);
+    SetSoftkeysL(R_WUNDERLAND_SOFTKEYS_STOREMENU_BACK);
+    iOpenType = aType;
+    HideTooltip();
+    iContentTypePage->MakeVisible(ETrue);
+    iContentTypePage->SetHighlighted(0);
+    DrawDeferred();
+    }
+
+void CWunderlandContainer::CloseContentTypeL()
+    {
+    if (iOpenType < 0)
+        {
+        return;
+        }
+    SetSoftkeysL(R_AVKON_SOFTKEYS_OPTIONS_EXIT);
+    iContentTypePage->SetHighlighted(-1);
+    iContentTypePage->MakeVisible(EFalse);
+    iTabBar->SetBarFocused(EFalse);
+    iCategoryList->SetHighlighted(iOpenType);
+    iOpenType = -1;
+    DrawDeferred();
+    }
+
+void CWunderlandContainer::SetSoftkeysL(TInt aResourceId)
+    {
+    CEikButtonGroupContainer* cba = CEikButtonGroupContainer::Current();
+    if (cba)
+        {
+        cba->SetCommandSetL(aResourceId);
+        cba->DrawDeferred();
+        }
     }
 
 MWunderlandPage& CWunderlandContainer::Page() const
@@ -365,6 +441,7 @@ void CWunderlandContainer::SizeChanged()
     iAppList->SetRect(ContentRect());
     iCategoryList->SetRect(ContentRect());
     iSearchPage->SetRect(ContentRect());
+    iContentTypePage->SetRect(rect);   // no tab bar over it
     TRAP_IGNORE(UpdateTooltipL(EFalse));   // only leaves on OOM; the old tooltip stays
     }
 
@@ -380,11 +457,19 @@ void CWunderlandContainer::HandleResourceChange(TInt aType)
 
 TInt CWunderlandContainer::CountComponentControls() const
     {
-    return iTabBar ? 3 : 0;
+    if (!iTabBar)
+        {
+        return 0;
+        }
+    return iOpenType >= 0 ? 1 : 3;   // a content type page covers everything
     }
 
 CCoeControl* CWunderlandContainer::ComponentControl(TInt aIndex) const
     {
+    if (iOpenType >= 0)
+        {
+        return aIndex == 0 ? iContentTypePage : NULL;
+        }
     switch (aIndex)
         {
         case 0:
@@ -422,7 +507,13 @@ void CWunderlandContainer::HandleControlEventL(CCoeControl* aControl, TCoeEvent 
         // A tapped row takes the focus
         iTabBar->SetBarFocused(EFalse);
         UpdateTooltipL();
+        if (aControl == iCategoryList)
+            {
+            OpenContentTypeL(iCategoryList->Highlighted());   // one tap opens, like Ovi Store
+            }
         }
+    // A tapped row on iContentTypePage is only highlighted.
+    // TODO: open the category's entries once there is a page for them.
     }
 
 void CWunderlandContainer::Draw(const TRect& /*aRect*/) const
@@ -441,6 +532,28 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
     if (aType != EEventKey)
         {
         return EKeyWasNotConsumed;
+        }
+    if (iOpenType >= 0)
+        {
+        // Content type page: up/down only; Back is the right softkey.
+        // TODO: OK opens the highlighted category's entries.
+        switch (aKeyEvent.iCode)
+            {
+            case EKeyDownArrow:
+            case EKeyUpArrow:
+                if (iContentTypePage->Highlighted() < 0)
+                    {
+                    iContentTypePage->SetHighlighted(0);
+                    }
+                else
+                    {
+                    // No wrapping: stays on the first / last row
+                    iContentTypePage->MoveHighlight(aKeyEvent.iCode == EKeyDownArrow ? 1 : -1);
+                    }
+                return EKeyWasConsumed;
+            default:
+                return EKeyWasNotConsumed;
+            }
         }
     // Focus runs tab bar -> list rows; up/down move it.
     if (iTabBar->IsBarFocused())
@@ -464,6 +577,14 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
     // drop-down) must be offered the key before this point and get to keep it.
     switch (aKeyEvent.iCode)
         {
+        case EKeyOK:
+        case EKeyEnter:
+            if (iTabBar->Active() == CWunderlandTabBar::ETabCategories && Page().Highlighted() >= 0)
+                {
+                OpenContentTypeL(Page().Highlighted());
+                return EKeyWasConsumed;
+                }
+            return EKeyWasNotConsumed;
         case EKeyLeftArrow:
         case EKeyRightArrow:
             if (iTabBar->SwitchTabL(aKeyEvent.iCode == EKeyLeftArrow ? -1 : 1))

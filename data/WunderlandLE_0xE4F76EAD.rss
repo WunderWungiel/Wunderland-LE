@@ -29,6 +29,16 @@ RESOURCE MENU_PANE r_wunderland_menu
         };
     }
 
+// Content type page: the left softkey opens the same menu as "Options"
+RESOURCE CBA r_wunderland_softkeys_storemenu_back
+    {
+    buttons =
+        {
+        CBA_BUTTON { id = EAknSoftkeyOptions; txt = "Store menu"; },
+        CBA_BUTTON { id = EAknSoftkeyBack; txt = "Back"; }
+        };
+    }
+
 RESOURCE LOCALISABLE_APP_INFO r_wunderland_localisable_app_info
     {
     short_caption = "WunderlandLE";

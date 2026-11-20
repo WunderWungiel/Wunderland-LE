@@ -22,6 +22,7 @@ SOURCE            WunderlandTooltip.cpp
 SOURCE            WunderlandAppList.cpp
 SOURCE            WunderlandCategoryList.cpp
 SOURCE            WunderlandSearchPage.cpp
+SOURCE            WunderlandContentTypePage.cpp
 SOURCE            WunderlandDrawUtils.cpp
 
 SOURCEPATH        ..\data
