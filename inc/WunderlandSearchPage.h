@@ -4,8 +4,13 @@
 #include <coecntrl.h>
 #include "WunderlandPage.h"
 
-// Search page: blank white for now. Has no rows, so the d-pad focus never
-// enters it (Up goes to the tab bar, Left/Right switch tabs).
+class CFont;
+class CWindowGc;
+
+// Search page: a dark grey header with a white search field (placeholder
+// text for now, not editable yet) and a blue "Go" button of the same height
+// to its right; white below. Has no rows, so the d-pad focus never enters it
+// (Up goes to the tab bar, Left/Right switch tabs).
 // Non-window-owning: lives inside the parent control's window.
 class CWunderlandSearchPage : public CCoeControl, public MWunderlandPage
     {
@@ -25,6 +30,15 @@ private: // from CCoeControl
 private:
     CWunderlandSearchPage();
     void ConstructL(const CCoeControl& aParent);
+
+    const CFont* FieldFont() const;
+    const CFont* ButtonFont() const;
+    TInt FieldHeight() const;
+    TRect HeaderRect() const;
+    TRect GoRect() const;
+    TRect FieldRect() const;
+    void DrawField(CWindowGc& aGc) const;
+    void DrawGoButton(CWindowGc& aGc) const;
     };
 
 #endif // __WUNDERLANDSEARCHPAGE_H__
