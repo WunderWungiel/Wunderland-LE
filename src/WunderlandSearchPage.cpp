@@ -11,6 +11,9 @@ namespace
     const TInt KFieldVPad = 5;      // text to the field's top/bottom edge
     const TInt KFieldHPad = 7;      // text to the field's left edge
     const TInt KButtonHPad = 16;    // "Go" to the button's left/right edge
+    const TInt KHintLineGap = 2;    // extra space between the hint's lines
+
+    _LIT(KHint, "Search for apps, games, themes and more in Wunderland Store!");
 
     const TRgb KHeaderColor()       { return TRgb(0x5E, 0x62, 0x68); }
     const TRgb KHeaderShadeColor()  { return TRgb(0x45, 0x48, 0x4D); }   // bottom edge
@@ -22,6 +25,7 @@ namespace
     const TRgb KButtonBottomColor() { return TRgb(0x10, 0x56, 0xB4); }
     const TRgb KButtonTextColor()   { return KRgbWhite; }
     const TRgb KPageColor()         { return KRgbWhite; }
+    const TRgb KHintColor()         { return TRgb(0x5A, 0x5A, 0x5A); }
     }
 
 CWunderlandSearchPage* CWunderlandSearchPage::NewL(const CCoeControl& aParent)
@@ -40,10 +44,12 @@ CWunderlandSearchPage::CWunderlandSearchPage()
 void CWunderlandSearchPage::ConstructL(const CCoeControl& aParent)
     {
     SetContainerWindowL(aParent);
+    iHintLines = new (ELeave) CArrayFixFlat<TPtrC>(4);
     }
 
 CWunderlandSearchPage::~CWunderlandSearchPage()
     {
+    delete iHintLines;
     }
 
 TInt CWunderlandSearchPage::Count() const
@@ -136,7 +142,75 @@ void CWunderlandSearchPage::Draw(const TRect& /*aRect*/) const
 
     DrawField(gc);
     DrawGoButton(gc);
+    DrawHint(gc);
     gc.CancelClippingRect();
+    }
+
+// The fonts follow the layout, which always comes with a SetRect(), so the
+// hint is wrapped again here. On failure it's simply not shown.
+void CWunderlandSearchPage::SizeChanged()
+    {
+    TRAPD(err, WrapHintL());
+    if (err != KErrNone)
+        {
+        iHintLines->Reset();
+        }
+    }
+
+const CFont* CWunderlandSearchPage::HintFont() const
+    {
+    return AknLayoutUtils::FontFromId(EAknLogicalFontPrimaryFont);
+    }
+
+// About four fifths of the page, like a centred paragraph.
+TInt CWunderlandSearchPage::HintLineWidth() const
+    {
+    return Rect().Width() * 4 / 5;
+    }
+
+void CWunderlandSearchPage::WrapHintL()
+    {
+    iHintLines->Reset();
+    const TInt width = HintLineWidth();
+    if (width <= 0)
+        {
+        return;
+        }
+    // The lines point into KHint, a literal, so they stay valid.
+    AknTextUtils::WrapToArrayL(KHint, width, *HintFont(), *iHintLines);
+    }
+
+// Centred horizontally on the page and vertically in the space below the header.
+void CWunderlandSearchPage::DrawHint(CWindowGc& aGc) const
+    {
+    const TInt count = iHintLines->Count();
+    if (count == 0)
+        {
+        return;
+        }
+    const CFont* font = HintFont();
+    const TInt lineH = font->HeightInPixels() + KHintLineGap;
+    const TRect rect(Rect());
+    const TRect body(rect.iTl.iX, HeaderRect().iBr.iY, rect.iBr.iX, rect.iBr.iY);
+    const TInt blockH = count * lineH - KHintLineGap;
+    TInt top = (body.Height() - blockH) / 2;
+    if (top < 0)
+        {
+        top = 0;   // too short: keep the first lines under the header
+        }
+
+    aGc.UseFont(font);
+    aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
+    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
+    aGc.SetPenColor(KHintColor());
+    TRect line(body.iTl.iX, body.iTl.iY + top, body.iBr.iX, 0);
+    for (TInt i = 0; i < count; ++i)
+        {
+        line.iBr.iY = line.iTl.iY + font->HeightInPixels();
+        aGc.DrawText((*iHintLines)[i], line, font->AscentInPixels(), CGraphicsContext::ECenter);
+        line.iTl.iY += lineH;
+        }
+    aGc.DiscardFont();
     }
 
 void CWunderlandSearchPage::DrawField(CWindowGc& aGc) const
