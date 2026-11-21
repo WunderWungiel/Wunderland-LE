@@ -1,4 +1,5 @@
 #include <aknutils.h>
+#include <e32base.h>
 #include <fbs.h>
 #include <gdi.h>
 #include <w32std.h>
@@ -22,6 +23,14 @@ namespace
     const TInt KMinThumbHeight = 8;
     const TInt KDragThreshold = 8;     // pixels before a tap becomes a drag
     const TInt KMaxDrawnText = 40;     // matches TItem's buffers
+    const TInt KMaxStatusText = 64;
+    // Ask for the next page when its loading row is this many rows (or
+    // fewer) below the bottom of the screen, so it's usually there before
+    // the user gets to it.
+    const TInt KPrefetchRows = 3;
+
+    _LIT(KLoadingText, "Loading...");
+    _LIT(KLoadFailedText, "Loading failed. Press down or tap to retry");
 
     const TRgb KEvenRowColor()      { return TRgb(0xE8, 0xE8, 0xE8); }   // first row, third, ...
     const TRgb KOddRowColor()       { return KRgbWhite; }
@@ -78,13 +87,15 @@ CWunderlandAppList* CWunderlandAppList::NewL(const CCoeControl& aParent)
     }
 
 CWunderlandAppList::CWunderlandAppList()
-    : iItems(KItemGranularity), iHighlighted(-1)
+    : iItems(KItemGranularity), iHighlighted(-1), iLoadState(ELoadDone)
     {
     }
 
 void CWunderlandAppList::ConstructL(const CCoeControl& aParent)
     {
     SetContainerWindowL(aParent);
+    iLoadCallBack = new (ELeave) CAsyncCallBack(
+        TCallBack(CWunderlandAppList::LoadMoreCallBack, this), CActive::EPriorityStandard);
 
     TFileName file(KStarsFile);
     User::LeaveIfError(CompleteWithAppPath(file));   // drive the app is installed on
@@ -96,6 +107,11 @@ void CWunderlandAppList::ConstructL(const CCoeControl& aParent)
 
 CWunderlandAppList::~CWunderlandAppList()
     {
+    if (iLoadCallBack)
+        {
+        iLoadCallBack->Cancel();
+        }
+    delete iLoadCallBack;
     delete iStarOn;
     delete iStarOnMask;
     delete iStarOff;
@@ -109,6 +125,8 @@ void CWunderlandAppList::Reset()
     iHighlighted = -1;
     iScrollY = 0;
     iDragged = EFalse;
+    iLoadState = ELoadDone;
+    iLoadCallBack->Cancel();
     DrawDeferred();
     }
 
@@ -125,6 +143,94 @@ void CWunderlandAppList::AppendL(const TDesC& aName, const TDesC& aSubtitle, TIn
 TInt CWunderlandAppList::Count() const
     {
     return iItems.Count();
+    }
+
+// ---------------------------------------------------------------------------
+// Paged loading
+
+void CWunderlandAppList::SetLoader(MWunderlandAppListLoader* aLoader)
+    {
+    iLoader = aLoader;
+    CheckLoadMore();
+    }
+
+void CWunderlandAppList::SetMoreAvailable(TBool aMore)
+    {
+    iLoadState = aMore ? ELoadPending : ELoadDone;
+    if (!aMore)
+        {
+        iLoadCallBack->Cancel();
+        SetScroll(iScrollY);   // the loading row is gone: re-clamp
+        }
+    DrawDeferred();
+    CheckLoadMore();   // the new page may not fill the screen
+    }
+
+void CWunderlandAppList::SetLoadFailed()
+    {
+    iLoadState = ELoadFailed;
+    iLoadCallBack->Cancel();
+    DrawDeferred();
+    }
+
+TBool CWunderlandAppList::IsLoading() const
+    {
+    return iLoadState == ELoadRequested;
+    }
+
+TBool CWunderlandAppList::RetryLoad()
+    {
+    if (iLoadState != ELoadFailed)
+        {
+        return EFalse;
+        }
+    iLoadState = ELoadPending;
+    DrawDeferred();
+    CheckLoadMore();
+    return ETrue;
+    }
+
+TBool CWunderlandAppList::NeedsMore() const
+    {
+    if (iLoadState != ELoadPending || !iLoader)
+        {
+        return EFalse;
+        }
+    // Pixels between the bottom of the screen and the top of the loading row
+    const TInt below = Count() * RowHeight() - (iScrollY + Rect().Height());
+    if (below <= KPrefetchRows * RowHeight())
+        {
+        return ETrue;
+        }
+    return iHighlighted >= Count() - KPrefetchRows;
+    }
+
+void CWunderlandAppList::CheckLoadMore()
+    {
+    if (iLoadCallBack && NeedsMore() && !iLoadCallBack->IsActive())
+        {
+        iLoadCallBack->CallBack();
+        }
+    }
+
+TInt CWunderlandAppList::LoadMoreCallBack(TAny* aSelf)
+    {
+    static_cast<CWunderlandAppList*>(aSelf)->DoLoadMore();
+    return KErrNone;
+    }
+
+void CWunderlandAppList::DoLoadMore()
+    {
+    if (!NeedsMore())   // scrolled back up, reset, ... in the meantime
+        {
+        return;
+        }
+    iLoadState = ELoadRequested;
+    TRAPD(err, iLoader->HandleLoadMoreL(*this));
+    if (err != KErrNone && iLoadState == ELoadRequested)
+        {
+        SetLoadFailed();
+        }
     }
 
 TInt CWunderlandAppList::Highlighted() const
@@ -152,6 +258,11 @@ void CWunderlandAppList::SetHighlighted(TInt aIndex)
 TBool CWunderlandAppList::MoveHighlight(TInt aDelta)
     {
     const TInt target = iHighlighted + aDelta;
+    if (iHighlighted >= 0 && target == Count() && RetryLoad())
+        {
+        EnsureVisible(iHighlighted);   // brings the loading row into view
+        return ETrue;
+        }
     if (iHighlighted < 0 || target < 0 || target >= Count())
         {
         return EFalse;
@@ -182,9 +293,14 @@ TInt CWunderlandAppList::RowHeight() const
     return textHeight > KMinRowHeight ? textHeight : KMinRowHeight;
     }
 
+TInt CWunderlandAppList::RowCount() const
+    {
+    return Count() + (iLoadState != ELoadDone ? 1 : 0);
+    }
+
 TInt CWunderlandAppList::ContentHeight() const
     {
-    return Count() * RowHeight();
+    return RowCount() * RowHeight();
     }
 
 TBool CWunderlandAppList::HasScrollBar() const
@@ -200,6 +316,15 @@ TInt CWunderlandAppList::ItemAt(const TPoint& aPos) const
         }
     const TInt item = (aPos.iY - Rect().iTl.iY + iScrollY) / RowHeight();
     return item < Count() ? item : -1;
+    }
+
+TBool CWunderlandAppList::IsLoadingRowAt(const TPoint& aPos) const
+    {
+    if (iLoadState == ELoadDone || !Rect().Contains(aPos))
+        {
+        return EFalse;
+        }
+    return (aPos.iY - Rect().iTl.iY + iScrollY) / RowHeight() == Count();
     }
 
 void CWunderlandAppList::SetScroll(TInt aScrollY)
@@ -222,19 +347,31 @@ void CWunderlandAppList::SetScroll(TInt aScrollY)
         iScrollY = aScrollY;
         DrawDeferred();
         }
+    CheckLoadMore();
     }
 
 void CWunderlandAppList::EnsureVisible(TInt aIndex)
     {
     const TInt rowH = RowHeight();
     const TInt top = aIndex * rowH;
+    // On the last row, also show the loading row under it
+    const TInt bottom = top + (aIndex == Count() - 1 && iLoadState != ELoadDone ? 2 : 1) * rowH;
     if (top < iScrollY)
         {
         SetScroll(top);
         }
-    else if (top + rowH > iScrollY + Rect().Height())
+    else if (bottom > iScrollY + Rect().Height())
         {
-        SetScroll(top + rowH - Rect().Height());
+        TInt scroll = bottom - Rect().Height();
+        if (scroll > top)
+            {
+            scroll = top;   // screen shorter than two rows: the row itself wins
+            }
+        SetScroll(scroll);
+        }
+    else
+        {
+        CheckLoadMore();   // SetScroll() does it on the other paths
         }
     }
 
@@ -284,6 +421,10 @@ void CWunderlandAppList::HandlePointerEventL(const TPointerEvent& aPointerEvent)
                     SetHighlighted(item);
                     ReportEventL(MCoeControlObserver::EEventStateChanged);
                     }
+                else if (IsLoadingRowAt(pos))
+                    {
+                    RetryLoad();   // no-op unless the page had failed
+                    }
                 }
             iDragged = EFalse;
             break;
@@ -307,7 +448,7 @@ void CWunderlandAppList::Draw(const TRect& /*aRect*/) const
     gc.DrawRect(rect);
 
     const TInt count = Count();
-    if (count == 0)
+    if (count == 0 && iLoadState == ELoadDone)
         {
         _LIT(KEmpty, "No items");
         const CFont* font = SubtitleFont();
@@ -325,14 +466,23 @@ void CWunderlandAppList::Draw(const TRect& /*aRect*/) const
 
     const TInt rowH = RowHeight();
     TInt first = iScrollY / rowH;
-    for (TInt i = first; i < count; ++i)
+    const TInt rows = RowCount();
+    for (TInt i = first; i < rows; ++i)
         {
         const TInt top = rect.iTl.iY + i * rowH - iScrollY;
         if (top >= rect.iBr.iY)
             {
             break;
             }
-        DrawRow(gc, i, TRect(rect.iTl.iX, top, rect.iBr.iX, top + rowH));
+        const TRect row(rect.iTl.iX, top, rect.iBr.iX, top + rowH);
+        if (i < count)
+            {
+            DrawRow(gc, i, row);
+            }
+        else
+            {
+            DrawLoadingRow(gc, row);
+            }
         }
 
     if (HasScrollBar())
@@ -457,6 +607,34 @@ void CWunderlandAppList::DrawStars(CWindowGc& aGc, TInt aRating, const TRect& aR
                          on ? iStarOnMask : iStarOffMask, EFalse);
         x += size.iWidth + KStarGap;
         }
+    }
+
+// After the last entry while another page is expected: "Loading...", or the
+// retry hint after a failure. Continues the row colours.
+void CWunderlandAppList::DrawLoadingRow(CWindowGc& aGc, const TRect& aRow) const
+    {
+    aGc.SetPenStyle(CGraphicsContext::ENullPen);
+    aGc.SetBrushStyle(CGraphicsContext::ESolidBrush);
+    aGc.SetBrushColor(Count() % 2 == 0 ? KEvenRowColor() : KOddRowColor());
+    aGc.DrawRect(aRow);
+
+    const TInt width = aRow.Width() - 2 * KTextHPad - (HasScrollBar() ? KScrollBarWidth : 0);
+    if (width <= 0)
+        {
+        return;
+        }
+    TBuf<KMaxStatusText> text(iLoadState == ELoadFailed ? KLoadFailedText() : KLoadingText());
+    const CFont* font = SubtitleFont();
+    AknTextUtils::ClipToFit(text, *font, width);
+    aGc.UseFont(font);
+    aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
+    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
+    aGc.SetPenColor(KEmptyTextColor());
+    const TRect textRect(aRow.iTl.iX + KTextHPad, aRow.iTl.iY,
+                         aRow.iTl.iX + KTextHPad + width, aRow.iBr.iY);
+    const TInt baseline = (textRect.Height() + font->AscentInPixels() - font->DescentInPixels()) / 2;
+    aGc.DrawText(text, textRect, baseline, CGraphicsContext::ECenter);
+    aGc.DiscardFont();
     }
 
 void CWunderlandAppList::DrawScrollBar(CWindowGc& aGc) const

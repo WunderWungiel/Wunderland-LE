@@ -23,6 +23,8 @@ namespace
     const TInt KSampleSeed = 0x5EED;  // fixed: the same sample list on every start
     const TInt KTooltipTimeout = 1000000;   // microseconds the tab tooltip stays up
     const TInt KSampleResultStep = 5;       // every 5th entry is a sample search result
+    const TInt KPageSize = 10;              // entries per loaded page (the API's default)
+    const TInt KSampleLatency = 600000;     // microseconds a sample page takes to "download"
 
     // Pseudo-random number in 0..aRange-1
     TInt Random(TInt64& aSeed, TInt aRange)
@@ -65,17 +67,24 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iTooltip = CWunderlandTooltip::NewL(*this);
     iTooltip->MakeVisible(EFalse);
     iTooltipTimer = CPeriodic::NewL(CActive::EPriorityStandard);
+    iLoadTimer = CPeriodic::NewL(CActive::EPriorityStandard);
     iContentTypes = new (ELeave) CDesCArrayFlat(KContentTypes);
     EnableDragEvents();   // touch scrolling of the list
+
+    iHomeFeed.iList = iAppList;
+    iResultsFeed.iList = &iResultsPage->List();
+    iAppList->SetLoader(this);
+    iResultsPage->List().SetLoader(this);
 
     AddContentTypesL();
     AddSampleCategoriesL();
     AddSampleAppsL();
-    UpdateAppListL();
     UpdatePage();
 
     SetRect(aRect);   // lays out the children via SizeChanged()
-    FocusListL();     // start on the first entry, like Ovi Store
+    // The first page loads once the app is up; its first entry then gets the
+    // highlight, like Ovi Store (FocusFirstRow).
+    ResetFeed(iHomeFeed);
     ActivateL();
     // ActivateL() only reaches the page that is a component control right
     // now; a page that isn't activated ignores its own DrawDeferred() calls.
@@ -88,6 +97,11 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
 
 CWunderlandContainer::~CWunderlandContainer()
     {
+    if (iLoadTimer)
+        {
+        iLoadTimer->Cancel();
+        }
+    delete iLoadTimer;
     iApps.Close();
     iCategories.ResetAndDestroy();
     delete iContentTypes;
@@ -222,17 +236,6 @@ void CWunderlandContainer::AddSampleAppsL()
     #undef WUNDERLAND_COUNT
     }
 
-// Every entry (the Home page).
-void CWunderlandContainer::UpdateAppListL()
-    {
-    iAppList->Reset();
-    const TInt count = iApps.Count();
-    for (TInt i = 0; i < count; ++i)
-        {
-        AppendAppL(*iAppList, i);
-        }
-    }
-
 // One row: the entry's name, its category under it, its rating.
 void CWunderlandContainer::AppendAppL(CWunderlandAppList& aList, TInt aIndex) const
     {
@@ -246,18 +249,168 @@ void CWunderlandContainer::AppendAppL(CWunderlandAppList& aList, TInt aIndex) co
     aList.AppendL(app.iName, subtitle, app.iRating);
     }
 
-// The same fixed sample results for any query: every few entries, from all
-// content types.
-// TODO: ask the store API for aQuery once there is one.
-void CWunderlandContainer::UpdateSearchResultsL(const TDesC& /*aQuery*/)
+// ---------------------------------------------------------------------------
+// Paged loading
+
+CWunderlandContainer::TFeed* CWunderlandContainer::FeedFor(const CWunderlandAppList& aList)
     {
-    CWunderlandAppList& list = iResultsPage->List();
-    list.Reset();
-    const TInt count = iApps.Count();
-    for (TInt i = 0; i < count; i += KSampleResultStep)
+    if (&aList == iHomeFeed.iList)
         {
-        AppendAppL(list, i);
+        return &iHomeFeed;
         }
+    if (&aList == iResultsFeed.iList)
+        {
+        return &iResultsFeed;
+        }
+    return NULL;
+    }
+
+void CWunderlandContainer::ResetFeed(TFeed& aFeed)
+    {
+    if (iLoading == &aFeed)
+        {
+        // TODO: CancelRequest() on the API client
+        iLoadTimer->Cancel();
+        iLoading = NULL;
+        }
+    aFeed.iNextPage = 0;
+    aFeed.iWanted = EFalse;
+    aFeed.iList->Reset();
+    aFeed.iList->SetMoreAvailable(ETrue);   // the list asks for the first page
+    StartNextLoad();   // another feed may have been waiting for the cancelled one
+    }
+
+// The list calls this when the user nears its end. If the page can't start,
+// StartNextLoad() shows the retry row.
+void CWunderlandContainer::HandleLoadMoreL(CWunderlandAppList& aList)
+    {
+    TFeed* feed = FeedFor(aList);
+    if (!feed)
+        {
+        User::Leave(KErrNotFound);   // the list shows the "loading failed" row
+        }
+    feed->iWanted = ETrue;
+    StartNextLoad();
+    }
+
+// One page at a time, the page on screen first.
+void CWunderlandContainer::StartNextLoad()
+    {
+    if (iLoading)
+        {
+        return;   // StartNextLoad() runs again when it arrives
+        }
+    TFeed* feed = NULL;
+    if (iResultsFeed.iWanted && iOverlay == EOverlaySearchResults)
+        {
+        feed = &iResultsFeed;
+        }
+    else if (iHomeFeed.iWanted)
+        {
+        feed = &iHomeFeed;
+        }
+    else if (iResultsFeed.iWanted)
+        {
+        feed = &iResultsFeed;
+        }
+    if (!feed)
+        {
+        return;
+        }
+    feed->iWanted = EFalse;
+    TRAPD(err, StartLoadL(*feed));
+    if (err == KErrNone)
+        {
+        iLoading = feed;
+        }
+    else
+        {
+        feed->iList->SetLoadFailed();   // offers a retry
+        }
+    }
+
+// TODO: with the store API, StartContentListL() with iPage = iNextPage + 1,
+// iPerPage = KPageSize and, for the results, iSearch = iSearchQuery;
+// HandleApiResponseL() then does what DeliverPageL() does with the items,
+// and sends errors to iList->SetLoadFailed().
+void CWunderlandContainer::StartLoadL(TFeed& /*aFeed*/)
+    {
+    iLoadTimer->Cancel();
+    iLoadTimer->Start(KSampleLatency, KSampleLatency,
+                      TCallBack(CWunderlandContainer::LoadDoneCallBack, this));
+    }
+
+TInt CWunderlandContainer::LoadDoneCallBack(TAny* aSelf)
+    {
+    CWunderlandContainer* self = static_cast<CWunderlandContainer*>(aSelf);
+    self->iLoadTimer->Cancel();   // CPeriodic repeats; one tick is enough
+    TFeed* feed = self->iLoading;
+    self->iLoading = NULL;
+    if (feed)
+        {
+        TRAPD(err, self->DeliverPageL(*feed));
+        if (err != KErrNone)
+            {
+            feed->iList->SetLoadFailed();
+            }
+        }
+    self->StartNextLoad();
+    return EFalse;
+    }
+
+// Appends page iNextPage of the feed's sample entries.
+void CWunderlandContainer::DeliverPageL(TFeed& aFeed)
+    {
+    CWunderlandAppList& list = *aFeed.iList;
+    const TBool first = (list.Count() == 0);
+    const TInt total = SampleCount(aFeed);
+    const TInt start = aFeed.iNextPage * KPageSize;
+    for (TInt pos = start; pos < start + KPageSize && pos < total; ++pos)
+        {
+        AppendAppL(list, SampleIndex(aFeed, pos));
+        }
+    ++aFeed.iNextPage;
+    list.SetMoreAvailable(start + KPageSize < total);   // meta's HasNextPage()
+    if (first)
+        {
+        FocusFirstRow(aFeed);
+        }
+    }
+
+// The first entry takes the highlight when the first page arrives, unless
+// the user has put the focus elsewhere in the meantime.
+void CWunderlandContainer::FocusFirstRow(TFeed& aFeed)
+    {
+    if (&aFeed == &iHomeFeed)
+        {
+        if (iOverlay == EOverlayNone && iTabBar->Active() == CWunderlandTabBar::ETabHome
+            && !iTabBar->IsBarFocused() && iAppList->Highlighted() < 0 && iAppList->Count() > 0)
+            {
+            iAppList->SetHighlighted(0);
+            }
+        }
+    else if (iOverlay == EOverlaySearchResults && iResultsPage->Highlighted() < 0)
+        {
+        // First result, or the search bar when there are none
+        iResultsPage->SetHighlighted(iResultsPage->Count() > 1 ? 1 : 0);
+        }
+    }
+
+// Home: every entry. Search results: the same fixed sample results for any
+// query, every few entries from all content types.
+TInt CWunderlandContainer::SampleCount(const TFeed& aFeed) const
+    {
+    const TInt count = iApps.Count();
+    if (&aFeed == &iResultsFeed)
+        {
+        return (count + KSampleResultStep - 1) / KSampleResultStep;
+        }
+    return count;
+    }
+
+TInt CWunderlandContainer::SampleIndex(const TFeed& aFeed, TInt aPos) const
+    {
+    return &aFeed == &iResultsFeed ? aPos * KSampleResultStep : aPos;
     }
 
 // TODO: fetch the content types from the store API once there is one.
@@ -346,7 +499,7 @@ void CWunderlandContainer::OpenSearchResultsL(const TDesC& aQuery)
     {
     iSearchPage->SetQueryL(aQuery);
     iResultsPage->SetQueryL(aQuery);
-    UpdateSearchResultsL(aQuery);
+    iSearchQuery = aQuery.Left(iSearchQuery.MaxLength());
     if (iOverlay != EOverlaySearchResults)
         {
         iSearchPage->SetHighlighted(-1);   // only one editor may have the focus
@@ -355,8 +508,9 @@ void CWunderlandContainer::OpenSearchResultsL(const TDesC& aQuery)
         HideTooltip();
         iResultsPage->MakeVisible(ETrue);
         }
-    // First result, or the search bar when there are none
-    iResultsPage->SetHighlighted(iResultsPage->Count() > 1 ? 1 : 0);
+    // No highlight until the first page arrives (FocusFirstRow)
+    iResultsPage->SetHighlighted(-1);
+    ResetFeed(iResultsFeed);   // drops the old results, loads the new ones
     DrawDeferred();
     }
 

@@ -82,6 +82,10 @@ void CWunderlandSearchResultsPage::SetHighlighted(TInt aIndex)
 TBool CWunderlandSearchResultsPage::MoveHighlight(TInt aDelta)
     {
     const TInt current = Highlighted();
+    if (current >= 1 && aDelta > 0)
+        {
+        return iList->MoveHighlight(aDelta);   // also retries a failed page at the end
+        }
     const TInt target = current + aDelta;
     if (current < 0 || target < 0 || target >= Count())
         {
