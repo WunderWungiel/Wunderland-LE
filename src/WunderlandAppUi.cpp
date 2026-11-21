@@ -1,5 +1,6 @@
 #include <avkon.hrh>
 #include <eikspane.h>
+#include <ecom/ecom.h>
 #include "WunderlandAppUi.h"
 #include "WunderlandContainer.h"
 #include "Wunderland.hrh"
@@ -25,6 +26,9 @@ CWunderlandAppUi::~CWunderlandAppUi()
         RemoveFromStack(iContainer);
         delete iContainer;
         }
+    // Once, after everything that may use ECom (the HTTP stack of the store
+    // API client) is gone.
+    REComSession::FinalClose();
     }
 
 void CWunderlandAppUi::HandleCommandL(TInt aCommand)

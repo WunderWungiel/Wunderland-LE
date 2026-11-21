@@ -7,7 +7,7 @@ TARGETTYPE        exe
 UID               0x100039CE 0xE4F76EAD
 SECUREID          0xE4F76EAD
 VENDORID          0
-CAPABILITY        NONE               // add NetworkServices once we talk to the store
+CAPABILITY        NetworkServices    // store API over HTTP (a user capability: OK unsigned)
 EPOCSTACKSIZE     0x5000             // GUI apps need >= 20 KB
 EPOCHEAPSIZE      0x10000 0x400000   // 64 KB min, 4 MB max
 
@@ -26,6 +26,9 @@ SOURCE            WunderlandSearchPage.cpp
 SOURCE            WunderlandSearchResultsPage.cpp
 SOURCE            WunderlandContentTypePage.cpp
 SOURCE            WunderlandDrawUtils.cpp
+SOURCE            WunderlandJson.cpp
+SOURCE            WunderlandApiTypes.cpp
+SOURCE            WunderlandApiClient.cpp
 
 SOURCEPATH        ..\data
 START RESOURCE    WunderlandLE_0xE4F76EAD.rss      // main resource: must come before _reg.rss
@@ -53,3 +56,4 @@ SYSTEMINCLUDE     \epoc32\include\platform \epoc32\include\app \epoc32\include\p
 LIBRARY           euser.lib apparc.lib cone.lib eikcore.lib avkon.lib
 LIBRARY           eikcoctl.lib gdi.lib ws32.lib bafl.lib fbscli.lib aknicon.lib
 LIBRARY           etext.lib egul.lib // search field: CCharFormatLayer, TMargins8
+LIBRARY           http.lib inetprotutil.lib esock.lib ecom.lib charconv.lib // store API client
