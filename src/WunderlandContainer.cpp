@@ -23,7 +23,6 @@ namespace
     const TInt KAppsPerType = 30;     // sample entries per content type
     const TInt KSampleSeed = 0x5EED;  // fixed: the same sample list on every start
     const TInt KTooltipTimeout = 1000000;   // microseconds the tab tooltip stays up
-    const TInt KSampleResultStep = 5;       // every 5th entry is a sample search result
     const TInt KPageSize = 10;              // entries per loaded page (the API's default)
     const TInt KSampleLatency = 600000;     // microseconds a sample page takes to "download"
     const TInt KReferenceMaxAge = 1;        // hours categories are kept (the API's max-age)
@@ -50,7 +49,7 @@ CWunderlandContainer* CWunderlandContainer::NewL(const TRect& aRect)
     }
 
 CWunderlandContainer::CWunderlandContainer()
-    : iOverlay(EOverlayNone), iOpenType(-1), iCategoriesLoading(-1)
+    : iOverlay(EOverlayNone), iOpenType(-1), iCategoriesWanted(-1), iCategoriesLoading(-1)
     {
     }
 
@@ -153,7 +152,7 @@ CWunderlandContainer::~CWunderlandContainer()
     delete iTabBar;
     }
 
-// Category names for the sample entries of Home and the search results:
+// Category names for the sample entries of Home:
 // one list each for apps, games and themes. The Categories tab doesn't use
 // them; its content types and categories come from the API.
 void CWunderlandContainer::AddSampleCategoriesL()
@@ -304,15 +303,21 @@ void CWunderlandContainer::ResetFeed(TFeed& aFeed)
     {
     if (iLoading == &aFeed)
         {
-        // TODO: CancelRequest() on the API client
-        iLoadTimer->Cancel();
+        if (&aFeed == &iResultsFeed)
+            {
+            iApi->CancelRequest();   // the running request is this feed's page
+            }
+        else
+            {
+            iLoadTimer->Cancel();
+            }
         iLoading = NULL;
         }
     aFeed.iNextPage = 0;
     aFeed.iWanted = EFalse;
     aFeed.iList->Reset();
     aFeed.iList->SetMoreAvailable(ETrue);   // the list asks for the first page
-    StartNextLoad();   // another feed may have been waiting for the cancelled one
+    StartNextRequest();   // something may have been waiting for the cancelled page
     }
 
 // The list calls this when the user nears its end. If the page can't start,
@@ -325,18 +330,21 @@ void CWunderlandContainer::HandleLoadMoreL(CWunderlandAppList& aList)
         User::Leave(KErrNotFound);   // the list shows the "loading failed" row
         }
     feed->iWanted = ETrue;
-    StartNextLoad();
+    StartNextRequest();
     }
 
-// One page at a time, the page on screen first.
+// One page at a time, the page on screen first. A results page needs the
+// API client; while it runs another request the page waits for
+// StartNextRequest().
 void CWunderlandContainer::StartNextLoad()
     {
     if (iLoading)
         {
         return;   // StartNextLoad() runs again when it arrives
         }
+    const TBool resultsReady = iResultsFeed.iWanted && !iApi->IsBusy();
     TFeed* feed = NULL;
-    if (iResultsFeed.iWanted && iOverlay == EOverlaySearchResults)
+    if (resultsReady && iOverlay == EOverlaySearchResults)
         {
         feed = &iResultsFeed;
         }
@@ -344,7 +352,7 @@ void CWunderlandContainer::StartNextLoad()
         {
         feed = &iHomeFeed;
         }
-    else if (iResultsFeed.iWanted)
+    else if (resultsReady)
         {
         feed = &iResultsFeed;
         }
@@ -364,12 +372,20 @@ void CWunderlandContainer::StartNextLoad()
         }
     }
 
-// TODO: with the store API, StartContentListL() with iPage = iNextPage + 1,
-// iPerPage = KPageSize and, for the results, iSearch = iSearchQuery;
-// HandleApiResponseL() then does what DeliverPageL() does with the items,
-// and sends errors to iList->SetLoadFailed().
-void CWunderlandContainer::StartLoadL(TFeed& /*aFeed*/)
+// Search results: GET /content?q=&page=&per_page=, answered in
+// ApiResponseL(). Home: sample data after a pretend delay.
+// TODO: Home from the API too (the same request without q).
+void CWunderlandContainer::StartLoadL(TFeed& aFeed)
     {
+    if (&aFeed == &iResultsFeed)
+        {
+        TWunderlandContentQuery query;
+        query.iSearch.Set(iSearchQuery);
+        query.iPage = aFeed.iNextPage + 1;   // the API counts pages from 1
+        query.iPerPage = KPageSize;
+        iApi->StartContentListL(query);
+        return;
+        }
     iLoadTimer->Cancel();
     iLoadTimer->Start(KSampleLatency, KSampleLatency,
                       TCallBack(CWunderlandContainer::LoadDoneCallBack, this));
@@ -389,23 +405,49 @@ TInt CWunderlandContainer::LoadDoneCallBack(TAny* aSelf)
             feed->iList->SetLoadFailed();
             }
         }
-    self->StartNextLoad();
+    self->StartNextRequest();
     return EFalse;
     }
 
-// Appends page iNextPage of the feed's sample entries.
+// Appends page iNextPage of the sample entries (Home only).
 void CWunderlandContainer::DeliverPageL(TFeed& aFeed)
     {
     CWunderlandAppList& list = *aFeed.iList;
     const TBool first = (list.Count() == 0);
-    const TInt total = SampleCount(aFeed);
+    const TInt total = iApps.Count();
     const TInt start = aFeed.iNextPage * KPageSize;
     for (TInt pos = start; pos < start + KPageSize && pos < total; ++pos)
         {
-        AppendAppL(list, SampleIndex(aFeed, pos));
+        AppendAppL(list, pos);
         }
     ++aFeed.iNextPage;
-    list.SetMoreAvailable(start + KPageSize < total);   // meta's HasNextPage()
+    list.SetMoreAvailable(start + KPageSize < total);
+    if (first)
+        {
+        FocusFirstRow(aFeed);
+        }
+    }
+
+// One page of GET /content: a row per item (title, category, whole stars).
+// A leave keeps iNextPage, so a retry asks for the same page again.
+void CWunderlandContainer::ContentPageLoadedL(TFeed& aFeed, const CWunderlandApiResponse& aResponse)
+    {
+    User::LeaveIfError(aResponse.Error());
+    CWunderlandAppList& list = *aFeed.iList;
+    const TBool first = (list.Count() == 0);
+    const TInt count = aResponse.Count();
+    for (TInt i = 0; i < count; ++i)
+        {
+        const TWunderlandContent item(aResponse.ItemAt(i));
+        if (!item.IsValid())
+            {
+            continue;   // not a content object
+            }
+        list.AppendL(item.Title(), item.CategoryName(), item.Rating().Rounded());
+        }
+    ++aFeed.iNextPage;
+    // An empty page is past the end, whatever meta says
+    list.SetMoreAvailable(count > 0 && aResponse.Meta().HasNextPage());
     if (first)
         {
         FocusFirstRow(aFeed);
@@ -431,30 +473,14 @@ void CWunderlandContainer::FocusFirstRow(TFeed& aFeed)
         }
     }
 
-// Home: every entry. Search results: the same fixed sample results for any
-// query, every few entries from all content types.
-TInt CWunderlandContainer::SampleCount(const TFeed& aFeed) const
-    {
-    const TInt count = iApps.Count();
-    if (&aFeed == &iResultsFeed)
-        {
-        return (count + KSampleResultStep - 1) / KSampleResultStep;
-        }
-    return count;
-    }
-
-TInt CWunderlandContainer::SampleIndex(const TFeed& aFeed, TInt aPos) const
-    {
-    return &aFeed == &iResultsFeed ? aPos * KSampleResultStep : aPos;
-    }
-
 // ---------------------------------------------------------------------------
 // Store API: content types and categories
 //
-// The client runs one request at a time. The content types load once at
-// start-up (and again on a retry); categories are only asked for after
-// that, for the page that is open, so the two never wait for each other.
-// Opening another type's page while categories are on the way cancels them.
+// The client runs one request at a time, shared with the search results
+// pages. StartNextRequest() starts whatever waits, in this order: the
+// categories of the open content type page, the content types, then a
+// results page. A running request isn't cancelled for another one, except
+// categories of a type whose page was left for another type's page.
 // No platform filter yet: the user can't pick one, so the counts and the
 // non-empty categories are over all platforms.
 
@@ -470,22 +496,81 @@ void CWunderlandContainer::LoadContentTypes()
 
 void CWunderlandContainer::LoadContentTypesL()
     {
+    if (iContentTypesWanted || iContentTypesLoading)
+        {
+        return;   // already on the way
+        }
     iContentTypesFailed = EFalse;
     iCategoryList->SetStatusL(KLoadingText);
-    if (iApi->IsBusy())
+    iContentTypesWanted = ETrue;
+    StartNextRequest();
+    }
+
+// Starts the waiting request with the highest priority if the client is
+// idle. A failure to start shows on the page it was for.
+void CWunderlandContainer::StartNextRequest()
+    {
+    if (iCategoriesWanted >= iContentTypes.Count())
         {
-        iApi->CancelRequest();
-        iCategoriesLoading = -1;
+        iCategoriesWanted = -1;   // the content types were reloaded meanwhile
         }
-    iApi->StartContentTypesL();
+    if (!iApi->IsBusy() && iCategoriesWanted >= 0)
+        {
+        const TInt type = iCategoriesWanted;
+        iCategoriesWanted = -1;
+        TRAPD(err, iApi->StartCategoriesL(*iContentTypes[type]->iId, KNullDesC));
+        if (err == KErrNone)
+            {
+            iCategoriesLoading = type;
+            }
+        else if (iOpenType == type)
+            {
+            TRAP_IGNORE(ShowCategoriesFailedL());
+            }
+        }
+    if (!iApi->IsBusy() && iContentTypesWanted)
+        {
+        iContentTypesWanted = EFalse;
+        TRAPD(err, iApi->StartContentTypesL());
+        if (err == KErrNone)
+            {
+            iContentTypesLoading = ETrue;
+            }
+        else
+            {
+            iContentTypesFailed = ETrue;
+            TRAP_IGNORE(iCategoryList->SetStatusL(KLoadFailedText, ETrue));
+            }
+        }
+    StartNextLoad();   // a results page if the client is still idle; Home anyway
     }
 
 void CWunderlandContainer::HandleApiResponseL(CWunderlandApiResponse& aResponse)
     {
+    TRAP_IGNORE(ApiResponseL(aResponse));
+    StartNextRequest();   // the client is idle again
+    }
+
+void CWunderlandContainer::ApiResponseL(CWunderlandApiResponse& aResponse)
+    {
     switch (aResponse.Request())
         {
+        case EWunderlandApiContentList:
+            {
+            if (iLoading == &iResultsFeed)
+                {
+                iLoading = NULL;
+                TRAPD(err, ContentPageLoadedL(iResultsFeed, aResponse));
+                if (err != KErrNone)
+                    {
+                    iResultsFeed.iList->SetLoadFailed();   // offers a retry
+                    }
+                }
+            break;
+            }
         case EWunderlandApiContentTypes:
             {
+            iContentTypesLoading = EFalse;
             TRAPD(err, ContentTypesLoadedL(aResponse));
             if (err != KErrNone)
                 {
@@ -594,13 +679,13 @@ void CWunderlandContainer::LoadCategoriesL(TInt aType)
         {
         return;   // already on the way
         }
-    if (iApi->IsBusy())
+    if (iCategoriesLoading >= 0)
         {
         iApi->CancelRequest();   // another type's categories: its page was closed
         iCategoriesLoading = -1;
         }
-    iApi->StartCategoriesL(*iContentTypes[aType]->iId, KNullDesC);
-    iCategoriesLoading = aType;
+    iCategoriesWanted = aType;   // replaces another type's that hadn't started
+    StartNextRequest();
     }
 
 // On the open content type page, unless its categories are on the way.

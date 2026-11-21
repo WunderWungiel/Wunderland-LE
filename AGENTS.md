@@ -9,8 +9,9 @@ The store has a JSON API (v1). **Before any API work, read its documentation fro
 https://raw.githubusercontent.com/WunderWungiel/Wunderland-Store/master/docs/api.md). It's the only spec;
 don't guess endpoints, fields or error codes. The client is `CWunderlandApiClient` (`inc/WunderlandApiClient.h`),
 with typed views in `inc/WunderlandApiTypes.h`.
-- From the API: the content types (Categories tab) and each type's categories (content type page).
-- Still sample data: the Home list and the search results (`CWunderlandContainer::StartLoadL`).
+- From the API: the content types (Categories tab), each type's categories (content type page) and the
+  search results (`GET /content?q=`, page by page).
+- Still sample data: the Home list (`CWunderlandContainer::StartLoadL`).
 
 **Read `.claude/rules/symbian-cpp.md` and `docs/symbian-cpp-docs/AGENTS.md` before touching code.**
 

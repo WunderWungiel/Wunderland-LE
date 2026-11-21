@@ -25,8 +25,9 @@ class MWunderlandPage;
 // softkeys: a content type selected on Categories, and the search results
 // after a search. Back returns to the tab they were opened from.
 // The Home list and the search results load page by page (KPageSize entries)
-// as the user scrolls, one page request at a time; for now from the sample
-// data, after a pretend network delay.
+// as the user scrolls, one page request at a time: the search results from
+// the store API (GET /content?q=), Home for now from sample data after a
+// pretend network delay.
 // The content types (Categories tab) and each type's categories come from
 // the store API: the types once at start-up, a type's categories when its
 // page opens (kept for an hour, as the API allows). A failed load shows a
@@ -77,6 +78,8 @@ private:
     void LoadCategoriesL(TInt aType);
     void CategoriesLoadedL(const CWunderlandApiResponse& aResponse);
     void ShowCategoriesFailedL();     // on the open content type page
+    void StartNextRequest();          // if the client is idle and a request waits
+    void ApiResponseL(CWunderlandApiResponse& aResponse);
     TBool HasFreshCategories(TInt aType) const;
     TBool RetryOpenPageL();           // EFalse if the open page has nothing to retry
 
@@ -110,8 +113,8 @@ private:
         };
 
     // A list filled page by page: what has been loaded and what it wants.
-    // With the store API, a page is GET /content?page=iNextPage+1&per_page=KPageSize
-    // (plus search= for the results) and "more" is meta's HasNextPage().
+    // A results page is GET /content?q=&page=iNextPage+1&per_page=KPageSize;
+    // "more" is meta's HasNextPage().
     class TFeed
         {
     public:
@@ -125,10 +128,9 @@ private:
     void StartNextLoad();             // if idle and a list wants a page
     void StartLoadL(TFeed& aFeed);    // requests aFeed's iNextPage
     static TInt LoadDoneCallBack(TAny* aSelf);
-    void DeliverPageL(TFeed& aFeed);
+    void DeliverPageL(TFeed& aFeed);  // Home's sample entries
+    void ContentPageLoadedL(TFeed& aFeed, const CWunderlandApiResponse& aResponse);
     void FocusFirstRow(TFeed& aFeed); // after a list's first page
-    TInt SampleCount(const TFeed& aFeed) const;              // entries in the feed
-    TInt SampleIndex(const TFeed& aFeed, TInt aPos) const;   // index into iApps
 
     CWunderlandTabBar* iTabBar;      // owned
     CWunderlandAppList* iAppList;    // owned
@@ -174,6 +176,9 @@ private:
     CWunderlandApiClient* iApi;      // owned
     RPointerArray<CContentType> iContentTypes;   // owned; in the server's order
     TBool iContentTypesFailed;       // the Categories tab shows the retry line
+    TBool iContentTypesWanted;       // to start once the client is idle
+    TBool iContentTypesLoading;      // the running request
+    TInt iCategoriesWanted;          // type whose categories wait for the client; -1: none
     TInt iCategoriesLoading;         // type whose categories are on the way; -1: none
     };
 
