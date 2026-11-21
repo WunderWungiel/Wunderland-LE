@@ -667,7 +667,8 @@ void CWunderlandContainer::HandleBackL()
 
 // Covers the tab bar and the tab pages; the Categories tab stays active
 // underneath with the opened row highlighted, ready for Back.
-// A type without categories (show_categories false) only has "See all".
+// A type without categories (show_categories false) has no page: it opens
+// nothing for now.
 // Categories loaded within the last hour are shown at once; otherwise they
 // load under a "Loading..." line.
 void CWunderlandContainer::OpenContentTypeL(TInt aType)
@@ -677,22 +678,25 @@ void CWunderlandContainer::OpenContentTypeL(TInt aType)
         return;
         }
     const CContentType& type = *iContentTypes[aType];
+    if (!type.iShowCategories)
+        {
+        // TODO: open the type's entries (GET /content?type=) once there is
+        // a page for them.
+        return;
+        }
     iContentTypePage->SetContentL(*type.iName);
     TBool load = EFalse;
-    if (type.iShowCategories)
+    if (HasFreshCategories(aType))
         {
-        if (HasFreshCategories(aType))
+        iContentTypePage->SetCategoriesL(*type.iCategoryNames);
+        if (type.iCategoryNames->MdcaCount() == 0)
             {
-            iContentTypePage->SetCategoriesL(*type.iCategoryNames);
-            if (type.iCategoryNames->MdcaCount() == 0)
-                {
-                iContentTypePage->SetStatusL(KNoCategories);
-                }
+            iContentTypePage->SetStatusL(KNoCategories);
             }
-        else
-            {
-            load = ETrue;
-            }
+        }
+    else
+        {
+        load = ETrue;
         }
     SetSoftkeysL(R_WUNDERLAND_SOFTKEYS_STOREMENU_BACK);
     iOverlay = EOverlayContentType;

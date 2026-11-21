@@ -165,7 +165,7 @@ private:
     public:
         HBufC* iId;                    // owned; "apps"
         HBufC* iName;                  // owned; "Applications"
-        TBool iShowCategories;         // EFalse: no categories, only "See all"
+        TBool iShowCategories;         // EFalse: no content type page; browse the entries directly
         CDesCArrayFlat* iCategoryNames;   // owned; NULL until loaded
         RArray<TInt> iCategoryIds;     // parallel to iCategoryNames
         TTime iLoadedAt;               // universal time of the categories
