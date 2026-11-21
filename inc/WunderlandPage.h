@@ -16,4 +16,13 @@ public:
     virtual TBool MoveHighlight(TInt aDelta) = 0;
     };
 
+class CCoeControl;
+
+// Told when the user taps a page's "loading failed" line to load it again.
+class MWunderlandRetryObserver
+    {
+public:
+    virtual void HandleRetryL(CCoeControl& aPage) = 0;
+    };
+
 #endif // __WUNDERLANDPAGE_H__

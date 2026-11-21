@@ -3,7 +3,9 @@
 
 #include <coecntrl.h>
 #include <badesca.h>
+#include "WunderlandApiClient.h"
 #include "WunderlandAppList.h"
+#include "WunderlandPage.h"
 #include "WunderlandSearchBar.h"
 
 class CWunderlandTabBar;
@@ -25,9 +27,15 @@ class MWunderlandPage;
 // The Home list and the search results load page by page (KPageSize entries)
 // as the user scrolls, one page request at a time; for now from the sample
 // data, after a pretend network delay.
+// The content types (Categories tab) and each type's categories come from
+// the store API: the types once at start-up, a type's categories when its
+// page opens (kept for an hour, as the API allows). A failed load shows a
+// retry line: Down or a tap retries.
 class CWunderlandContainer : public CCoeControl, public MCoeControlObserver,
                              public MWunderlandSearchObserver,
-                             public MWunderlandAppListLoader
+                             public MWunderlandAppListLoader,
+                             public MWunderlandApiObserver,
+                             public MWunderlandRetryObserver
     {
 public:
     static CWunderlandContainer* NewL(const TRect& aRect);
@@ -49,6 +57,10 @@ private: // from MWunderlandSearchObserver
     void HandleSearchL(const TDesC& aQuery);
 private: // from MWunderlandAppListLoader
     void HandleLoadMoreL(CWunderlandAppList& aList);
+private: // from MWunderlandApiObserver
+    void HandleApiResponseL(CWunderlandApiResponse& aResponse);
+private: // from MWunderlandRetryObserver
+    void HandleRetryL(CCoeControl& aPage);
 private:
     CWunderlandContainer();
     void ConstructL(const TRect& aRect);
@@ -56,7 +68,17 @@ private:
     void AddSampleCategoriesL();
     void AddSampleAppsL();
     void AppendAppL(CWunderlandAppList& aList, TInt aIndex) const;   // index into iApps
-    void AddContentTypesL();
+
+    // Store API: content types and categories
+    void LoadContentTypes();          // GET /content-types; failure shows the retry line
+    void LoadContentTypesL();
+    void ContentTypesLoadedL(const CWunderlandApiResponse& aResponse);
+    void LoadCategories(TInt aType);  // GET /categories?type=; for the open page
+    void LoadCategoriesL(TInt aType);
+    void CategoriesLoadedL(const CWunderlandApiResponse& aResponse);
+    void ShowCategoriesFailedL();     // on the open content type page
+    TBool HasFreshCategories(TInt aType) const;
+    TBool RetryOpenPageL();           // EFalse if the open page has nothing to retry
 
     MWunderlandPage& Page() const;      // of the active tab
     CCoeControl* PageControl() const;   // the same object as a control
@@ -130,8 +152,29 @@ private:
     TFeed* iLoading;                 // the feed whose page is on the way; NULL: idle
     TBuf<KWunderlandMaxQuery> iSearchQuery;   // of iResultsFeed
     RArray<TApp> iApps;
-    CDesCArrayFlat* iContentTypes;   // owned; Apps, Games, Themes
-    RPointerArray<CDesCArrayFlat> iCategories;   // owned; one list per content type
+    RPointerArray<CDesCArrayFlat> iSampleCategories;   // owned; category names of the sample entries
+
+    // One content type from the API and its categories once loaded
+    class CContentType : public CBase
+        {
+    public:
+        static CContentType* NewLC(const TDesC& aId, const TDesC& aName, TBool aShowCategories);
+        ~CContentType();
+    private:
+        void ConstructL(const TDesC& aId, const TDesC& aName);
+    public:
+        HBufC* iId;                    // owned; "apps"
+        HBufC* iName;                  // owned; "Applications"
+        TBool iShowCategories;         // EFalse: no categories, only "See all"
+        CDesCArrayFlat* iCategoryNames;   // owned; NULL until loaded
+        RArray<TInt> iCategoryIds;     // parallel to iCategoryNames
+        TTime iLoadedAt;               // universal time of the categories
+        };
+
+    CWunderlandApiClient* iApi;      // owned
+    RPointerArray<CContentType> iContentTypes;   // owned; in the server's order
+    TBool iContentTypesFailed;       // the Categories tab shows the retry line
+    TInt iCategoriesLoading;         // type whose categories are on the way; -1: none
     };
 
 #endif // __WUNDERLANDCONTAINER_H__

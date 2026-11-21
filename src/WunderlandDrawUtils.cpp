@@ -115,3 +115,23 @@ void WunderlandDraw::DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TD
                               aRect.iTl.iY + KHeaderVPad + font->AscentInPixels()));
     aGc.DiscardFont();
     }
+
+void WunderlandDraw::DrawStatusText(CWindowGc& aGc, const TRect& aRect, const TDesC& aText)
+    {
+    const TInt KMaxStatus = 64;
+    const TInt width = aRect.Width();
+    if (width <= 0)
+        {
+        return;
+        }
+    const CFont* font = AknLayoutUtils::FontFromId(EAknLogicalFontSecondaryFont);
+    TBuf<KMaxStatus> text(aText.Left(KMaxStatus));
+    AknTextUtils::ClipToFit(text, *font, width);
+    aGc.UseFont(font);
+    aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
+    aGc.SetPenStyle(CGraphicsContext::ESolidPen);
+    aGc.SetPenColor(TRgb(0x80, 0x80, 0x80));   // the lists' "No items" grey
+    const TInt baseline = (aRect.Height() + font->AscentInPixels() - font->DescentInPixels()) / 2;
+    aGc.DrawText(text, aRect, baseline, CGraphicsContext::ECenter);
+    aGc.DiscardFont();
+    }

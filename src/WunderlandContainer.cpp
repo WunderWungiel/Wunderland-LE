@@ -5,6 +5,7 @@
 #include <eikon.hrh>
 #include <e32math.h>
 #include <gdi.h>
+#include "WunderlandApiTypes.h"
 #include "WunderlandAppList.h"
 #include "WunderlandCategoryList.h"
 #include "WunderlandContainer.h"
@@ -25,6 +26,12 @@ namespace
     const TInt KSampleResultStep = 5;       // every 5th entry is a sample search result
     const TInt KPageSize = 10;              // entries per loaded page (the API's default)
     const TInt KSampleLatency = 600000;     // microseconds a sample page takes to "download"
+    const TInt KReferenceMaxAge = 1;        // hours categories are kept (the API's max-age)
+
+    _LIT(KLoadingText, "Loading...");
+    _LIT(KLoadFailedText, "Loading failed. Press down or tap to retry");
+    _LIT(KNoContentTypes, "No content types");
+    _LIT(KNoCategories, "No categories");
 
     // Pseudo-random number in 0..aRange-1
     TInt Random(TInt64& aSeed, TInt aRange)
@@ -43,8 +50,32 @@ CWunderlandContainer* CWunderlandContainer::NewL(const TRect& aRect)
     }
 
 CWunderlandContainer::CWunderlandContainer()
-    : iOverlay(EOverlayNone), iOpenType(-1)
+    : iOverlay(EOverlayNone), iOpenType(-1), iCategoriesLoading(-1)
     {
+    }
+
+CWunderlandContainer::CContentType* CWunderlandContainer::CContentType::NewLC(
+    const TDesC& aId, const TDesC& aName, TBool aShowCategories)
+    {
+    CContentType* self = new (ELeave) CContentType;
+    CleanupStack::PushL(self);
+    self->ConstructL(aId, aName);
+    self->iShowCategories = aShowCategories;
+    return self;
+    }
+
+void CWunderlandContainer::CContentType::ConstructL(const TDesC& aId, const TDesC& aName)
+    {
+    iId = aId.AllocL();
+    iName = aName.AllocL();
+    }
+
+CWunderlandContainer::CContentType::~CContentType()
+    {
+    iCategoryIds.Close();
+    delete iCategoryNames;
+    delete iName;
+    delete iId;
     }
 
 void CWunderlandContainer::ConstructL(const TRect& aRect)
@@ -57,10 +88,12 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iAppList->SetObserver(this);
     iCategoryList = CWunderlandCategoryList::NewL(*this);
     iCategoryList->SetObserver(this);
+    iCategoryList->SetRetryObserver(this);
     iSearchPage = CWunderlandSearchPage::NewL(*this, *this);
     iSearchPage->SetObserver(this);
     iContentTypePage = CWunderlandContentTypePage::NewL(*this);
     iContentTypePage->SetObserver(this);
+    iContentTypePage->SetRetryObserver(this);
     iContentTypePage->MakeVisible(EFalse);
     iResultsPage = CWunderlandSearchResultsPage::NewL(*this, *this);
     iResultsPage->MakeVisible(EFalse);
@@ -68,7 +101,7 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iTooltip->MakeVisible(EFalse);
     iTooltipTimer = CPeriodic::NewL(CActive::EPriorityStandard);
     iLoadTimer = CPeriodic::NewL(CActive::EPriorityStandard);
-    iContentTypes = new (ELeave) CDesCArrayFlat(KContentTypes);
+    iApi = CWunderlandApiClient::NewL(*this);
     EnableDragEvents();   // touch scrolling of the list
 
     iHomeFeed.iList = iAppList;
@@ -76,7 +109,6 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iAppList->SetLoader(this);
     iResultsPage->List().SetLoader(this);
 
-    AddContentTypesL();
     AddSampleCategoriesL();
     AddSampleAppsL();
     UpdatePage();
@@ -85,6 +117,7 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     // The first page loads once the app is up; its first entry then gets the
     // highlight, like Ovi Store (FocusFirstRow).
     ResetFeed(iHomeFeed);
+    LoadContentTypes();   // the Categories tab; the first request may ask for an access point
     ActivateL();
     // ActivateL() only reaches the page that is a component control right
     // now; a page that isn't activated ignores its own DrawDeferred() calls.
@@ -97,14 +130,15 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
 
 CWunderlandContainer::~CWunderlandContainer()
     {
+    delete iApi;   // first: cancels a request, so no callback reaches a half-deleted container
+    iContentTypes.ResetAndDestroy();
     if (iLoadTimer)
         {
         iLoadTimer->Cancel();
         }
     delete iLoadTimer;
     iApps.Close();
-    iCategories.ResetAndDestroy();
-    delete iContentTypes;
+    iSampleCategories.ResetAndDestroy();
     if (iTooltipTimer)
         {
         iTooltipTimer->Cancel();
@@ -119,8 +153,9 @@ CWunderlandContainer::~CWunderlandContainer()
     delete iTabBar;
     }
 
-// One category list per content type, in the order of iContentTypes.
-// TODO: fetch the categories from the store API once there is one.
+// Category names for the sample entries of Home and the search results:
+// one list each for apps, games and themes. The Categories tab doesn't use
+// them; its content types and categories come from the API.
 void CWunderlandContainer::AddSampleCategoriesL()
     {
     const TText* const apps[] =
@@ -154,7 +189,7 @@ void CWunderlandContainer::AddCategoriesL(const TText* const* aNames, TInt aCoun
         {
         list->AppendL(TPtrC(aNames[i]));
         }
-    iCategories.AppendL(list);
+    iSampleCategories.AppendL(list);
     CleanupStack::Pop(list);
     }
 
@@ -196,7 +231,7 @@ void CWunderlandContainer::AddSampleAppsL()
     TInt64 seed = KSampleSeed;
     for (TInt type = 0; type < KContentTypes; ++type)
         {
-        const TInt categories = iCategories[type]->MdcaCount();
+        const TInt categories = iSampleCategories[type]->MdcaCount();
         const TText* const* first;
         const TText* const* second;
         TInt firstCount;
@@ -241,10 +276,10 @@ void CWunderlandContainer::AppendAppL(CWunderlandAppList& aList, TInt aIndex) co
     {
     const TApp& app = iApps[aIndex];
     TPtrC subtitle(KNullDesC);
-    if (app.iType >= 0 && app.iType < iCategories.Count()
-        && app.iCategory >= 0 && app.iCategory < iCategories[app.iType]->MdcaCount())
+    if (app.iType >= 0 && app.iType < iSampleCategories.Count()
+        && app.iCategory >= 0 && app.iCategory < iSampleCategories[app.iType]->MdcaCount())
         {
-        subtitle.Set(iCategories[app.iType]->MdcaPoint(app.iCategory));
+        subtitle.Set(iSampleCategories[app.iType]->MdcaPoint(app.iCategory));
         }
     aList.AppendL(app.iName, subtitle, app.iRating);
     }
@@ -413,21 +448,205 @@ TInt CWunderlandContainer::SampleIndex(const TFeed& aFeed, TInt aPos) const
     return &aFeed == &iResultsFeed ? aPos * KSampleResultStep : aPos;
     }
 
-// TODO: fetch the content types from the store API once there is one.
-void CWunderlandContainer::AddContentTypesL()
+// ---------------------------------------------------------------------------
+// Store API: content types and categories
+//
+// The client runs one request at a time. The content types load once at
+// start-up (and again on a retry); categories are only asked for after
+// that, for the page that is open, so the two never wait for each other.
+// Opening another type's page while categories are on the way cancels them.
+// No platform filter yet: the user can't pick one, so the counts and the
+// non-empty categories are over all platforms.
+
+void CWunderlandContainer::LoadContentTypes()
     {
-    _LIT(KTypeApps,   "Apps");
-    _LIT(KTypeGames,  "Games");
-    _LIT(KTypeThemes, "Themes");
-    iContentTypes->Reset();
-    iContentTypes->AppendL(KTypeApps);
-    iContentTypes->AppendL(KTypeGames);
-    iContentTypes->AppendL(KTypeThemes);
+    TRAPD(err, LoadContentTypesL());
+    if (err != KErrNone)
+        {
+        iContentTypesFailed = ETrue;
+        TRAP_IGNORE(iCategoryList->SetStatusL(KLoadFailedText, ETrue));
+        }
+    }
+
+void CWunderlandContainer::LoadContentTypesL()
+    {
+    iContentTypesFailed = EFalse;
+    iCategoryList->SetStatusL(KLoadingText);
+    if (iApi->IsBusy())
+        {
+        iApi->CancelRequest();
+        iCategoriesLoading = -1;
+        }
+    iApi->StartContentTypesL();
+    }
+
+void CWunderlandContainer::HandleApiResponseL(CWunderlandApiResponse& aResponse)
+    {
+    switch (aResponse.Request())
+        {
+        case EWunderlandApiContentTypes:
+            {
+            TRAPD(err, ContentTypesLoadedL(aResponse));
+            if (err != KErrNone)
+                {
+                iContentTypes.ResetAndDestroy();
+                iCategoryList->Reset();
+                iContentTypesFailed = ETrue;
+                iCategoryList->SetStatusL(KLoadFailedText, ETrue);
+                }
+            break;
+            }
+        case EWunderlandApiCategories:
+            {
+            const TInt type = iCategoriesLoading;
+            TRAPD(err, CategoriesLoadedL(aResponse));
+            iCategoriesLoading = -1;
+            if (err != KErrNone && iOpenType == type)
+                {
+                ShowCategoriesFailedL();
+                }
+            break;
+            }
+        default:
+            break;
+        }
+    }
+
+// Replaces the rows of the Categories tab. A leave leaves a partial list;
+// the caller then empties it and shows the retry line.
+void CWunderlandContainer::ContentTypesLoadedL(const CWunderlandApiResponse& aResponse)
+    {
+    User::LeaveIfError(aResponse.Error());
+    iContentTypes.ResetAndDestroy();
     iCategoryList->Reset();
-    const TInt count = iContentTypes->MdcaCount();
+    const TInt count = aResponse.Count();
     for (TInt i = 0; i < count; ++i)
         {
-        iCategoryList->AppendL(iContentTypes->MdcaPoint(i));
+        const TWunderlandContentType type(aResponse.ItemAt(i));
+        if (type.Id().Length() == 0)
+            {
+            continue;   // not a content type object
+            }
+        CContentType* entry = CContentType::NewLC(type.Id(), type.Name(), type.ShowCategories());
+        iContentTypes.AppendL(entry);
+        CleanupStack::Pop(entry);
+        iCategoryList->AppendL(type.Name());
+        }
+    iCategoryList->SetStatusL(iContentTypes.Count() > 0 ? KNullDesC() : KNoContentTypes());
+    }
+
+// Fills the categories of iCategoriesLoading and, if its page is open, the
+// page. On a leave the type has no categories (iCategoryNames NULL).
+void CWunderlandContainer::CategoriesLoadedL(const CWunderlandApiResponse& aResponse)
+    {
+    const TInt typeIndex = iCategoriesLoading;
+    if (typeIndex < 0 || typeIndex >= iContentTypes.Count())
+        {
+        return;
+        }
+    CContentType& type = *iContentTypes[typeIndex];
+    delete type.iCategoryNames;
+    type.iCategoryNames = NULL;
+    type.iCategoryIds.Reset();
+    User::LeaveIfError(aResponse.Error());
+
+    CDesCArrayFlat* names = new (ELeave) CDesCArrayFlat(KCategoryGranularity);
+    CleanupStack::PushL(names);
+    const TInt count = aResponse.Count();
+    for (TInt i = 0; i < count; ++i)
+        {
+        const TWunderlandCategory category(aResponse.ItemAt(i));
+        if (category.Name().Length() == 0)
+            {
+            continue;   // not a category object
+            }
+        names->AppendL(category.Name());
+        type.iCategoryIds.AppendL(category.Id());
+        }
+    CleanupStack::Pop(names);
+    type.iCategoryNames = names;
+    type.iLoadedAt.UniversalTime();
+
+    if (iOverlay == EOverlayContentType && iOpenType == typeIndex)
+        {
+        iContentTypePage->SetCategoriesL(*names);
+        iContentTypePage->SetStatusL(names->MdcaCount() > 0 ? KNullDesC() : KNoCategories());
+        }
+    }
+
+void CWunderlandContainer::LoadCategories(TInt aType)
+    {
+    TRAPD(err, LoadCategoriesL(aType));
+    if (err != KErrNone)
+        {
+        TRAP_IGNORE(ShowCategoriesFailedL());
+        }
+    }
+
+void CWunderlandContainer::LoadCategoriesL(TInt aType)
+    {
+    if (aType < 0 || aType >= iContentTypes.Count())
+        {
+        return;
+        }
+    iContentTypePage->SetStatusL(KLoadingText);
+    if (iCategoriesLoading == aType)
+        {
+        return;   // already on the way
+        }
+    if (iApi->IsBusy())
+        {
+        iApi->CancelRequest();   // another type's categories: its page was closed
+        iCategoriesLoading = -1;
+        }
+    iApi->StartCategoriesL(*iContentTypes[aType]->iId, KNullDesC);
+    iCategoriesLoading = aType;
+    }
+
+// On the open content type page, unless its categories are on the way.
+void CWunderlandContainer::ShowCategoriesFailedL()
+    {
+    if (iOverlay == EOverlayContentType && iOpenType != iCategoriesLoading)
+        {
+        iContentTypePage->SetStatusL(KLoadFailedText, ETrue);
+        }
+    }
+
+TBool CWunderlandContainer::HasFreshCategories(TInt aType) const
+    {
+    const CContentType& type = *iContentTypes[aType];
+    if (!type.iCategoryNames)
+        {
+        return EFalse;
+        }
+    TTime now;
+    now.UniversalTime();
+    // A clock set back counts as stale too
+    return now >= type.iLoadedAt && now < type.iLoadedAt + TTimeIntervalHours(KReferenceMaxAge);
+    }
+
+TBool CWunderlandContainer::RetryOpenPageL()
+    {
+    if (iOverlay != EOverlayContentType || !iContentTypePage->CanRetry())
+        {
+        return EFalse;
+        }
+    LoadCategories(iOpenType);
+    return ETrue;
+    }
+
+void CWunderlandContainer::HandleRetryL(CCoeControl& aPage)
+    {
+    if (&aPage == iCategoryList)
+        {
+        if (iContentTypesFailed)
+            {
+            LoadContentTypes();
+            }
+        }
+    else if (&aPage == iContentTypePage)
+        {
+        RetryOpenPageL();
         }
     }
 
@@ -448,19 +667,43 @@ void CWunderlandContainer::HandleBackL()
 
 // Covers the tab bar and the tab pages; the Categories tab stays active
 // underneath with the opened row highlighted, ready for Back.
+// A type without categories (show_categories false) only has "See all".
+// Categories loaded within the last hour are shown at once; otherwise they
+// load under a "Loading..." line.
 void CWunderlandContainer::OpenContentTypeL(TInt aType)
     {
-    if (aType < 0 || aType >= iContentTypes->MdcaCount() || aType >= iCategories.Count())
+    if (aType < 0 || aType >= iContentTypes.Count())
         {
         return;
         }
-    iContentTypePage->SetContentL(iContentTypes->MdcaPoint(aType), *iCategories[aType]);
+    const CContentType& type = *iContentTypes[aType];
+    iContentTypePage->SetContentL(*type.iName);
+    TBool load = EFalse;
+    if (type.iShowCategories)
+        {
+        if (HasFreshCategories(aType))
+            {
+            iContentTypePage->SetCategoriesL(*type.iCategoryNames);
+            if (type.iCategoryNames->MdcaCount() == 0)
+                {
+                iContentTypePage->SetStatusL(KNoCategories);
+                }
+            }
+        else
+            {
+            load = ETrue;
+            }
+        }
     SetSoftkeysL(R_WUNDERLAND_SOFTKEYS_STOREMENU_BACK);
     iOverlay = EOverlayContentType;
     iOpenType = aType;
     HideTooltip();
     iContentTypePage->MakeVisible(ETrue);
     iContentTypePage->SetHighlighted(0);
+    if (load)
+        {
+        LoadCategories(aType);   // after iOpenType: a failure shows on this page
+        }
     DrawDeferred();
     }
 
@@ -585,6 +828,10 @@ void CWunderlandContainer::UpdatePage()
         {
         iSearchPage->SetHighlighted(-1);
         }
+    if (active == CWunderlandTabBar::ETabCategories && iContentTypesFailed)
+        {
+        LoadContentTypes();   // coming back to the tab retries
+        }
     DrawDeferred();
     }
 
@@ -605,6 +852,10 @@ void CWunderlandContainer::FocusListL()
     {
     if (Page().Count() == 0)
         {
+        if (iTabBar->Active() == CWunderlandTabBar::ETabCategories && iContentTypesFailed)
+            {
+            LoadContentTypes();   // Down into the empty tab retries
+            }
         return;
         }
     iTabBar->SetBarFocused(EFalse);
@@ -832,10 +1083,12 @@ TKeyResponse CWunderlandContainer::OfferKeyEventL(const TKeyEvent& aKeyEvent, TE
                     {
                     iContentTypePage->SetHighlighted(0);
                     }
-                else
+                // No wrapping: stays on the first / last row. Down on the
+                // last row retries failed categories.
+                else if (!iContentTypePage->MoveHighlight(aKeyEvent.iCode == EKeyDownArrow ? 1 : -1)
+                         && aKeyEvent.iCode == EKeyDownArrow)
                     {
-                    // No wrapping: stays on the first / last row
-                    iContentTypePage->MoveHighlight(aKeyEvent.iCode == EKeyDownArrow ? 1 : -1);
+                    RetryOpenPageL();
                     }
                 return EKeyWasConsumed;
             default:

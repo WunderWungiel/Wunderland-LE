@@ -60,15 +60,19 @@ void CWunderlandContentTypePage::ConstructL(const CCoeControl& aParent)
 
 CWunderlandContentTypePage::~CWunderlandContentTypePage()
     {
+    delete iStatus;
     delete iItems;
     }
 
-void CWunderlandContentTypePage::SetContentL(const TDesC& aTitle, const MDesCArray& aCategories)
+void CWunderlandContentTypePage::SetContentL(const TDesC& aTitle)
     {
     iItems->Reset();
     iHighlighted = -1;
     iScrollY = 0;
     iDragged = EFalse;
+    delete iStatus;
+    iStatus = NULL;
+    iRetry = EFalse;
     iTitle = aTitle.Left(iTitle.MaxLength());
 
     TBuf<KMaxDrawnText> seeAll(KSeeAll);
@@ -76,12 +80,49 @@ void CWunderlandContentTypePage::SetContentL(const TDesC& aTitle, const MDesCArr
     type.LowerCase();
     seeAll.Append(type.Left(seeAll.MaxLength() - seeAll.Length()));
     iItems->AppendL(seeAll);
+    DrawDeferred();
+    }
+
+// Builds the new rows first, so a leave keeps the old ones.
+void CWunderlandContentTypePage::SetCategoriesL(const MDesCArray& aCategories)
+    {
     const TInt count = aCategories.MdcaCount();
+    CDesC16ArrayFlat* items = new (ELeave) CDesC16ArrayFlat(KItemGranularity);
+    CleanupStack::PushL(items);
+    items->AppendL(iItems->MdcaCount() > 0 ? iItems->MdcaPoint(0) : KNullDesC());   // "See all"
     for (TInt i = 0; i < count; ++i)
         {
-        iItems->AppendL(aCategories.MdcaPoint(i));
+        items->AppendL(aCategories.MdcaPoint(i));
         }
+    CleanupStack::Pop(items);
+    delete iItems;
+    iItems = items;
+    if (iHighlighted >= Count())
+        {
+        iHighlighted = -1;
+        }
+    SetScroll(iScrollY);   // re-clamp
     DrawDeferred();
+    }
+
+void CWunderlandContentTypePage::SetStatusL(const TDesC& aText, TBool aRetry)
+    {
+    HBufC* status = aText.Length() > 0 ? aText.AllocL() : NULL;
+    delete iStatus;
+    iStatus = status;
+    iRetry = status && aRetry;
+    SetScroll(iScrollY);   // the content got shorter or longer
+    DrawDeferred();
+    }
+
+TBool CWunderlandContentTypePage::CanRetry() const
+    {
+    return iRetry;
+    }
+
+void CWunderlandContentTypePage::SetRetryObserver(MWunderlandRetryObserver* aObserver)
+    {
+    iRetryObserver = aObserver;
     }
 
 TInt CWunderlandContentTypePage::Count() const
@@ -165,7 +206,30 @@ TInt CWunderlandContentTypePage::ContentHeight() const
         {
         return 0;
         }
+    if (iStatus)
+        {
+        return StatusTop() + RowHeight() + KMargin;
+        }
     return RowTop(count - 1) + RowHeight() + 1 + KMargin;   // +1: the block's bottom line
+    }
+
+// Right under the last row, where the next row would go (with the gap under
+// "See all" when that is the only row).
+TInt CWunderlandContentTypePage::StatusTop() const
+    {
+    const TInt count = Count();
+    return count <= 1 ? RowTop(1) : RowTop(count) + 1;
+    }
+
+TBool CWunderlandContentTypePage::IsStatusAt(const TPoint& aPos) const
+    {
+    const TRect list(ListRect());
+    if (!iStatus || !list.Contains(aPos))
+        {
+        return EFalse;
+        }
+    const TInt y = aPos.iY - list.iTl.iY + iScrollY;
+    return y >= StatusTop() && y < StatusTop() + RowHeight();
     }
 
 TBool CWunderlandContentTypePage::HasScrollBar() const
@@ -279,6 +343,10 @@ void CWunderlandContentTypePage::HandlePointerEventL(const TPointerEvent& aPoint
                     SetHighlighted(item);
                     ReportEventL(MCoeControlObserver::EEventStateChanged);
                     }
+                else if (iRetry && iRetryObserver && IsStatusAt(pos))
+                    {
+                    iRetryObserver->HandleRetryL(*this);
+                    }
                 }
             iDragged = EFalse;
             break;
@@ -326,6 +394,11 @@ void CWunderlandContentTypePage::Draw(const TRect& /*aRect*/) const
         const TInt top = listTop + RowTop(iHighlighted);
         DrawRow(gc, iHighlighted, TRect(left, top, right, top + rowH + (iHighlighted == 0 ? 0 : 1)),
                 iHighlighted == 0 ? KCornerRadius : 0);
+        }
+    if (iStatus)
+        {
+        const TInt top = listTop + StatusTop();
+        WunderlandDraw::DrawStatusText(gc, TRect(left, top, right, top + rowH), *iStatus);
         }
 
     if (HasScrollBar())

@@ -16,15 +16,26 @@ class CDesC16ArrayFlat;
 // Non-window-owning. Keys are fed by the parent (MoveHighlight); pointer
 // events arrive through the parent. Reports EEventStateChanged to its
 // observer when a tap highlights a row.
+// A grey status line ("Loading...", "Loading failed...") can follow the
+// rows while the categories load; a tap on a retry status goes to the retry
+// observer.
 class CWunderlandContentTypePage : public CCoeControl, public MWunderlandPage
     {
 public:
     static CWunderlandContentTypePage* NewL(const CCoeControl& aParent);
     ~CWunderlandContentTypePage();
 
-    // Row 0 is "See all <aTitle in lower case>", rows 1.. are aCategories.
-    // Removes the highlight and scrolls to the top.
-    void SetContentL(const TDesC& aTitle, const MDesCArray& aCategories);
+    // Row 0 is "See all <aTitle in lower case>", the only row until
+    // SetCategoriesL(). Removes the highlight and the status, scrolls to the top.
+    void SetContentL(const TDesC& aTitle);
+    // Rows 1.. become aCategories. The highlight stays where it is if that
+    // row still exists.
+    void SetCategoriesL(const MDesCArray& aCategories);
+
+    // KNullDesC hides the line. aRetry: a tap on it calls the retry observer.
+    void SetStatusL(const TDesC& aText, TBool aRetry = EFalse);
+    TBool CanRetry() const;   // a retry status is shown
+    void SetRetryObserver(MWunderlandRetryObserver* aObserver);   // not owned
 
 public: // from MWunderlandPage
     TInt Count() const;
@@ -52,6 +63,8 @@ private:
     TInt ContentHeight() const;
     TBool HasScrollBar() const;
     TInt ItemAt(const TPoint& aPos) const;   // -1 if none
+    TInt StatusTop() const;                   // list coordinates
+    TBool IsStatusAt(const TPoint& aPos) const;
     void SetScroll(TInt aScrollY);            // clamps
     void EnsureVisible(TInt aIndex);
 
@@ -61,6 +74,9 @@ private:
 private:
     TBuf<32> iTitle;
     CDesC16ArrayFlat* iItems;   // owned
+    HBufC* iStatus;             // owned; NULL: no status line
+    TBool iRetry;
+    MWunderlandRetryObserver* iRetryObserver;   // not owned
     TInt iHighlighted;
     TInt iScrollY;              // pixels scrolled from the top of the list
     // touch tracking

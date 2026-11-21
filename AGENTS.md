@@ -1,7 +1,16 @@
 # WunderlandLE — native Symbian client for Wunderland Store
 
 Native S60 3rd/5th Edition (Symbian 9.1–9.4) client for Wunderland Store (https://ovi.wunderwungiel.pl,
-server: https://github.com/WunderWungiel/Wunderland-Store). There is no API yet, so use sample data.
+server: https://github.com/WunderWungiel/Wunderland-Store).
+
+## Store API
+The store has a JSON API (v1). **Before any API work, read its documentation from the server repo:
+`docs/api.md` in https://github.com/WunderWungiel/Wunderland-Store** (raw:
+https://raw.githubusercontent.com/WunderWungiel/Wunderland-Store/master/docs/api.md). It's the only spec;
+don't guess endpoints, fields or error codes. The client is `CWunderlandApiClient` (`inc/WunderlandApiClient.h`),
+with typed views in `inc/WunderlandApiTypes.h`.
+- From the API: the content types (Categories tab) and each type's categories (content type page).
+- Still sample data: the Home list and the search results (`CWunderlandContainer::StartLoadL`).
 
 **Read `.claude/rules/symbian-cpp.md` and `docs/symbian-cpp-docs/AGENTS.md` before touching code.**
 

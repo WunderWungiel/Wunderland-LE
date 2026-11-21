@@ -62,6 +62,7 @@ void CWunderlandCategoryList::ConstructL(const CCoeControl& aParent)
 
 CWunderlandCategoryList::~CWunderlandCategoryList()
     {
+    delete iStatus;
     delete iItems;
     }
 
@@ -78,6 +79,26 @@ void CWunderlandCategoryList::AppendL(const TDesC& aName)
     {
     iItems->AppendL(aName);
     DrawDeferred();
+    }
+
+void CWunderlandCategoryList::SetStatusL(const TDesC& aText, TBool aRetry)
+    {
+    HBufC* status = aText.Length() > 0 ? aText.AllocL() : NULL;
+    delete iStatus;
+    iStatus = status;
+    iRetry = status && aRetry;
+    SetScroll(iScrollY);   // the content got shorter or longer
+    DrawDeferred();
+    }
+
+TBool CWunderlandCategoryList::CanRetry() const
+    {
+    return iRetry;
+    }
+
+void CWunderlandCategoryList::SetRetryObserver(MWunderlandRetryObserver* aObserver)
+    {
+    iRetryObserver = aObserver;
     }
 
 TInt CWunderlandCategoryList::Count() const
@@ -147,9 +168,11 @@ TInt CWunderlandCategoryList::RowTop(TInt aIndex) const
     return HeadingHeight() + aIndex * (RowHeight() + KRowGap);
     }
 
+// The status line, if any, takes the place of one more row.
 TInt CWunderlandCategoryList::ContentHeight() const
     {
-    return RowTop(Count()) - KRowGap + KMargin;   // bottom margin after the last row
+    const TInt rows = Count() + (iStatus ? 1 : 0);
+    return RowTop(rows) - KRowGap + KMargin;   // bottom margin after the last row
     }
 
 TBool CWunderlandCategoryList::HasScrollBar() const
@@ -176,6 +199,16 @@ TInt CWunderlandCategoryList::ItemAt(const TPoint& aPos) const
         return -1;
         }
     return item;
+    }
+
+TBool CWunderlandCategoryList::IsStatusAt(const TPoint& aPos) const
+    {
+    if (!iStatus || !Rect().Contains(aPos))
+        {
+        return EFalse;
+        }
+    const TInt y = aPos.iY - Rect().iTl.iY + iScrollY;
+    return y >= RowTop(Count()) && y < RowTop(Count()) + RowHeight();
     }
 
 void CWunderlandCategoryList::SetScroll(TInt aScrollY)
@@ -261,6 +294,10 @@ void CWunderlandCategoryList::HandlePointerEventL(const TPointerEvent& aPointerE
                     SetHighlighted(item);
                     ReportEventL(MCoeControlObserver::EEventStateChanged);
                     }
+                else if (iRetry && iRetryObserver && IsStatusAt(pos))
+                    {
+                    iRetryObserver->HandleRetryL(*this);
+                    }
                 }
             iDragged = EFalse;
             break;
@@ -309,6 +346,11 @@ void CWunderlandCategoryList::Draw(const TRect& /*aRect*/) const
             {
             DrawRow(gc, i, TRect(left, top, right, top + rowH));
             }
+        }
+    if (iStatus)
+        {
+        const TInt top = pageTop + RowTop(count);
+        WunderlandDraw::DrawStatusText(gc, TRect(left, top, right, top + rowH), *iStatus);
         }
 
     if (HasScrollBar())

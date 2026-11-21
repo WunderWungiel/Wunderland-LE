@@ -24,6 +24,10 @@ namespace WunderlandDraw
     // primary font. Height follows the font, so it changes with the layout.
     TInt PageHeaderHeight();
     void DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TDesC& aTitle);
+
+    // Grey status text ("Loading...", "Loading failed...") centred in aRect
+    // in the secondary font, clipped with "..." when it doesn't fit.
+    void DrawStatusText(CWindowGc& aGc, const TRect& aRect, const TDesC& aText);
     }
 
 #endif // __WUNDERLANDDRAWUTILS_H__

@@ -15,14 +15,21 @@ class CDesC16ArrayFlat;
 // Non-window-owning. Keys are fed by the parent (MoveHighlight); pointer
 // events arrive through the parent. Reports EEventStateChanged to its
 // observer when a tap highlights a row.
+// A grey status line ("Loading...", "Loading failed...") can follow the
+// rows; a tap on a retry status goes to the retry observer.
 class CWunderlandCategoryList : public CCoeControl, public MWunderlandPage
     {
 public:
     static CWunderlandCategoryList* NewL(const CCoeControl& aParent);
     ~CWunderlandCategoryList();
 
-    void Reset();   // removes all rows, highlight and scroll
+    void Reset();   // removes all rows, highlight and scroll (not the status)
     void AppendL(const TDesC& aName);
+
+    // KNullDesC hides the line. aRetry: a tap on it calls the retry observer.
+    void SetStatusL(const TDesC& aText, TBool aRetry = EFalse);
+    TBool CanRetry() const;   // a retry status is shown
+    void SetRetryObserver(MWunderlandRetryObserver* aObserver);   // not owned
 
 public: // from MWunderlandPage
     TInt Count() const;
@@ -50,6 +57,7 @@ private:
     TInt ContentHeight() const;
     TBool HasScrollBar() const;
     TInt ItemAt(const TPoint& aPos) const;   // -1 if none
+    TBool IsStatusAt(const TPoint& aPos) const;
     void SetScroll(TInt aScrollY);            // clamps
     void EnsureVisible(TInt aIndex);
 
@@ -58,6 +66,9 @@ private:
 
 private:
     CDesC16ArrayFlat* iItems;   // owned
+    HBufC* iStatus;             // owned; NULL: no status line
+    TBool iRetry;
+    MWunderlandRetryObserver* iRetryObserver;   // not owned
     TInt iHighlighted;
     TInt iScrollY;              // pixels scrolled from the top of the page
     // touch tracking
