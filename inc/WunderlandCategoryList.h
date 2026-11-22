@@ -7,7 +7,7 @@
 class CFont;
 class CDesC16ArrayFlat;
 
-// Categories page in the Ovi Store style: a large grey bold "Categories"
+// Categories page in the Ovi Store style: a grey bold "Categories" (large on nHD)
 // heading, then one thick row per entry (content types for now). Rows are rounded
 // boxes inset from the edges, left-aligned with the heading: dark grey bold
 // name on the left, "»" on the right. The highlighted row turns dark grey

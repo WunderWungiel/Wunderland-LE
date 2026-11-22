@@ -53,6 +53,61 @@ const CFont* RWunderlandFont::Font() const
     return iFont ? iFont : AknLayoutUtils::FontFromId(iBaseFontId);
     }
 
+namespace
+    {
+    const TInt KRefShortSide = 360;   // the screen the pixel sizes are designed for
+    TInt gShortSide = 0;              // cached by UpdateScale(); 0 = not yet
+    }
+
+void WunderlandDraw::UpdateScale()
+    {
+    TRect screen;
+    if (!AknLayoutUtils::LayoutMetricsRect(AknLayoutUtils::EScreen, screen))
+        {
+        screen = TRect(CCoeEnv::Static()->ScreenDevice()->SizeInPixels());
+        }
+    const TSize size(screen.Size());
+    gShortSide = size.iWidth < size.iHeight ? size.iWidth : size.iHeight;
+    if (gShortSide <= 0)
+        {
+        gShortSide = KRefShortSide;
+        }
+    }
+
+TInt WunderlandDraw::Px(TInt aRefPixels)
+    {
+    if (gShortSide == 0)
+        {
+        UpdateScale();
+        }
+    if (aRefPixels == 0)
+        {
+        return 0;
+        }
+    const TInt px = (aRefPixels * gShortSide + KRefShortSide / 2) / KRefShortSide;
+    return px != 0 ? px : (aRefPixels > 0 ? 1 : -1);
+    }
+
+namespace
+    {
+    // Below nHD some elements keep their original (pre-nHD) look.
+    TBool IsSmallScreen()
+        {
+        if (gShortSide == 0)
+            {
+            WunderlandDraw::UpdateScale();
+            }
+        return gShortSide < KRefShortSide;
+        }
+    }
+
+const CFont* WunderlandDraw::HeadingFont()
+    {
+    return AknLayoutUtils::FontFromId(!IsSmallScreen()
+                                      ? EAknLogicalFontTitleFont          // large bold
+                                      : EAknLogicalFontPrimarySmallFont); // small bold
+    }
+
 TRgb WunderlandDraw::Blend(const TRgb& aFrom, const TRgb& aTo, TInt aNum, TInt aDen)
     {
     if (aDen <= 0)
@@ -123,7 +178,15 @@ void WunderlandDraw::FillRoundGradient(CWindowGc& aGc, const TRect& aRect, const
 
 namespace
     {
-    const TInt KHeaderTextInset = 24;  // lines up with the row text of the pages below
+    // Small screens keep the original bar: fixed padding, smaller inset.
+    const TInt KHeaderTextInset = 24;       // lines up with the row text of the pages below
+    const TInt KSmallHeaderTextInset = 16;
+    const TInt KSmallHeaderVPad = 8;
+
+    TInt HeaderTextInset()
+        {
+        return IsSmallScreen() ? KSmallHeaderTextInset : KHeaderTextInset;
+        }
     const TInt KMaxTitle = 64;
 
     const TRgb KHeaderTopColor()     { return TRgb(0xF2, 0xF3, 0xF4); }
@@ -136,11 +199,11 @@ namespace
         return AknLayoutUtils::FontFromId(EAknLogicalFontPrimaryFont);
         }
 
-    // Above/below the title. Grows with the font so the bar keeps the same
-    // proportions on every layout (about 2.5x the text height).
+    // Above/below the title. On nHD and bigger it grows with the font
+    // (the bar is about 2.5x the text height).
     TInt HeaderVPad(const CFont& aFont)
         {
-        return 10 + aFont.HeightInPixels() / 3;
+        return IsSmallScreen() ? KSmallHeaderVPad : 10 + aFont.HeightInPixels() / 3;
         }
     }
 
@@ -157,7 +220,7 @@ void WunderlandDraw::DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TD
     aGc.SetPenColor(KHeaderShadeColor());
     aGc.DrawLine(TPoint(aRect.iTl.iX, aRect.iBr.iY - 1), TPoint(aRect.iBr.iX, aRect.iBr.iY - 1));
 
-    const TInt width = aRect.Width() - 2 * KHeaderTextInset;
+    const TInt width = aRect.Width() - 2 * HeaderTextInset();
     if (width <= 0)
         {
         return;
@@ -169,7 +232,7 @@ void WunderlandDraw::DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TD
     aGc.SetBrushStyle(CGraphicsContext::ENullBrush);
     aGc.SetPenStyle(CGraphicsContext::ESolidPen);
     aGc.SetPenColor(KHeaderTextColor());
-    aGc.DrawText(text, TPoint(aRect.iTl.iX + KHeaderTextInset,
+    aGc.DrawText(text, TPoint(aRect.iTl.iX + HeaderTextInset(),
                               aRect.iTl.iY + HeaderVPad(*font) + font->AscentInPixels()));
     aGc.DiscardFont();
     }

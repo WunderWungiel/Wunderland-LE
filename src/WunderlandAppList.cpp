@@ -8,9 +8,11 @@
 #include <wunderlandle_0xe4f76ead_stars.mbg>
 
 using WunderlandDraw::FillGradient;
+using WunderlandDraw::Px;
 
 namespace
     {
+    // Pixel sizes for a 360 px short screen side; used through Px().
     const TInt KItemGranularity = 16;
     const TInt KMinRowHeight = 60;     // rows double as touch targets
     const TInt KMargin = 10;           // around the box; the scroll bar sits in the right one
@@ -184,7 +186,7 @@ void CWunderlandAppList::SetIcon(TInt aIndex, CFbsBitmap* aBitmap, CFbsBitmap* a
 
 TSize CWunderlandAppList::IconSize() const
     {
-    const TInt size = RowHeight() - 2 * KIconPad;
+    const TInt size = RowHeight() - 2 * Px(KIconPad);
     return TSize(size, size);
     }
 
@@ -347,7 +349,7 @@ const CFont* CWunderlandAppList::SubtitleFont() const
 
 const CFont* CWunderlandAppList::TitleFont() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontTitleFont);   // large bold
+    return WunderlandDraw::HeadingFont();
     }
 
 TInt CWunderlandAppList::RowHeight() const
@@ -356,8 +358,8 @@ TInt CWunderlandAppList::RowHeight() const
     // so every list has the same row (and icon) size.
     const TInt textHeight = NameFont()->HeightInPixels() + KLineGap
                           + SubtitleFont()->HeightInPixels() + KStarsGap
-                          + StarsHeight() + 2 * KRowVPad;
-    return textHeight > KMinRowHeight ? textHeight : KMinRowHeight;
+                          + StarsHeight() + 2 * Px(KRowVPad);
+    return textHeight > Px(KMinRowHeight) ? textHeight : Px(KMinRowHeight);
     }
 
 TInt CWunderlandAppList::RowCount() const
@@ -373,17 +375,17 @@ TInt CWunderlandAppList::BoxRows() const
 
 TInt CWunderlandAppList::RowsTop() const
     {
-    TInt top = KMargin + KBorder;
+    TInt top = Px(KMargin) + KBorder;
     if (iTitle.Length() > 0)
         {
-        top += TitleFont()->HeightInPixels() + KTitleGap;
+        top += TitleFont()->HeightInPixels() + Px(KTitleGap);
         }
     return top;
     }
 
 TInt CWunderlandAppList::ContentHeight() const
     {
-    return RowsTop() + BoxRows() * RowHeight() + KBorder + KMargin;
+    return RowsTop() + BoxRows() * RowHeight() + KBorder + Px(KMargin);
     }
 
 TRect CWunderlandAppList::RowRect(TInt aRow) const
@@ -391,7 +393,7 @@ TRect CWunderlandAppList::RowRect(TInt aRow) const
     const TRect rect(Rect());
     const TInt rowH = RowHeight();
     const TInt top = rect.iTl.iY - iScrollY + RowsTop() + aRow * rowH;
-    return TRect(rect.iTl.iX + KMargin + KBorder, top, rect.iBr.iX - KMargin - KBorder, top + rowH);
+    return TRect(rect.iTl.iX + Px(KMargin) + KBorder, top, rect.iBr.iX - Px(KMargin) - KBorder, top + rowH);
     }
 
 TBool CWunderlandAppList::HasScrollBar() const
@@ -552,7 +554,7 @@ void CWunderlandAppList::Draw(const TRect& /*aRect*/) const
     if (iTitle.Length() > 0)
         {
         const CFont* font = TitleFont();
-        const TInt width = rect.Width() - 2 * KMargin;
+        const TInt width = rect.Width() - 2 * Px(KMargin);
         if (width > 0)
             {
             TBuf<KMaxDrawnText> text(iTitle);
@@ -561,7 +563,7 @@ void CWunderlandAppList::Draw(const TRect& /*aRect*/) const
             gc.SetBrushStyle(CGraphicsContext::ENullBrush);
             gc.SetPenStyle(CGraphicsContext::ESolidPen);
             gc.SetPenColor(KTitleColor());
-            gc.DrawText(text, TPoint(rect.iTl.iX + KMargin, top + KMargin + font->AscentInPixels()));
+            gc.DrawText(text, TPoint(rect.iTl.iX + Px(KMargin), top + Px(KMargin) + font->AscentInPixels()));
             gc.DiscardFont();
             }
         }
@@ -569,8 +571,8 @@ void CWunderlandAppList::Draw(const TRect& /*aRect*/) const
     // The white box with its outline; the rows go inside
     const TInt rowH = RowHeight();
     const TInt boxRows = BoxRows();
-    const TRect box(rect.iTl.iX + KMargin, top + RowsTop() - KBorder,
-                    rect.iBr.iX - KMargin, top + RowsTop() + boxRows * rowH + KBorder);
+    const TRect box(rect.iTl.iX + Px(KMargin), top + RowsTop() - KBorder,
+                    rect.iBr.iX - Px(KMargin), top + RowsTop() + boxRows * rowH + KBorder);
     gc.SetPenStyle(CGraphicsContext::ESolidPen);
     gc.SetPenColor(KBorderColor());
     gc.SetBrushStyle(CGraphicsContext::ESolidBrush);
@@ -600,8 +602,8 @@ void CWunderlandAppList::Draw(const TRect& /*aRect*/) const
             DrawRowBackground(gc, i, row, EFalse);
             const TDesC& text = iLoadState == ELoadDone ? KEmptyText()
                               : (iLoadState == ELoadFailed ? KLoadFailedText() : KLoadingText());
-            WunderlandDraw::DrawStatusText(gc, TRect(row.iTl.iX + KTextHPad, row.iTl.iY,
-                                                     row.iBr.iX - KTextHPad, row.iBr.iY), text);
+            WunderlandDraw::DrawStatusText(gc, TRect(row.iTl.iX + Px(KTextHPad), row.iTl.iY,
+                                                     row.iBr.iX - Px(KTextHPad), row.iBr.iY), text);
             }
         }
 
@@ -638,14 +640,14 @@ void CWunderlandAppList::DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& aRow)
     DrawRowBackground(aGc, aIndex, aRow, highlighted);
 
     // Square icon, inset from the row's edges
-    const TInt iconSize = aRow.Height() - 2 * KIconPad;
-    const TRect iconRect(TPoint(aRow.iTl.iX + KIconPad, aRow.iTl.iY + KIconPad),
+    const TInt iconSize = aRow.Height() - 2 * Px(KIconPad);
+    const TRect iconRect(TPoint(aRow.iTl.iX + Px(KIconPad), aRow.iTl.iY + Px(KIconPad)),
                          TSize(iconSize, iconSize));
     DrawIcon(aGc, aIndex, iconRect);
 
     // Name, subtitle and stars under each other, centred vertically as a block
-    const TInt textLeft = iconRect.iBr.iX + KTextHPad;
-    const TInt textWidth = aRow.iBr.iX - KTextHPad - textLeft;
+    const TInt textLeft = iconRect.iBr.iX + Px(KTextHPad);
+    const TInt textWidth = aRow.iBr.iX - Px(KTextHPad) - textLeft;
     if (textWidth <= 0)
         {
         return;

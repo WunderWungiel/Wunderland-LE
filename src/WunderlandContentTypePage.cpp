@@ -6,9 +6,11 @@
 #include "WunderlandDrawUtils.h"
 
 using WunderlandDraw::FillRoundGradient;
+using WunderlandDraw::Px;
 
 namespace
     {
+    // Pixel sizes for a 360 px short screen side; used through Px().
     const TInt KItemGranularity = 16;
     const TInt KMargin = 10;           // page edges to the rows, header text inset
     const TInt KGroupGap = 14;         // above and below "See all"
@@ -185,8 +187,8 @@ TRect CWunderlandContentTypePage::ListRect() const
 
 TInt CWunderlandContentTypePage::RowHeight() const
     {
-    const TInt h = RowFont()->HeightInPixels() + 2 * KRowVPad;
-    return h > KMinRowHeight ? h : KMinRowHeight;
+    const TInt h = RowFont()->HeightInPixels() + 2 * Px(KRowVPad);
+    return h > Px(KMinRowHeight) ? h : Px(KMinRowHeight);
     }
 
 // Row 0 stands alone; rows 1.. touch, sharing their 1px border lines.
@@ -194,9 +196,9 @@ TInt CWunderlandContentTypePage::RowTop(TInt aIndex) const
     {
     if (aIndex == 0)
         {
-        return KGroupGap;
+        return Px(KGroupGap);
         }
-    return KGroupGap + RowHeight() + KGroupGap + (aIndex - 1) * RowHeight();
+    return Px(KGroupGap) + RowHeight() + Px(KGroupGap) + (aIndex - 1) * RowHeight();
     }
 
 TInt CWunderlandContentTypePage::ContentHeight() const
@@ -208,9 +210,9 @@ TInt CWunderlandContentTypePage::ContentHeight() const
         }
     if (iStatus)
         {
-        return StatusTop() + RowHeight() + KMargin;
+        return StatusTop() + RowHeight() + Px(KMargin);
         }
-    return RowTop(count - 1) + RowHeight() + 1 + KMargin;   // +1: the block's bottom line
+    return RowTop(count - 1) + RowHeight() + 1 + Px(KMargin);   // +1: the block's bottom line
     }
 
 // Right under the last row, where the next row would go (with the gap under
@@ -240,7 +242,7 @@ TBool CWunderlandContentTypePage::HasScrollBar() const
 TInt CWunderlandContentTypePage::ItemAt(const TPoint& aPos) const
     {
     const TRect list(ListRect());
-    if (!list.Contains(aPos) || aPos.iX < list.iTl.iX + KMargin || aPos.iX >= list.iBr.iX - KMargin)
+    if (!list.Contains(aPos) || aPos.iX < list.iTl.iX + Px(KMargin) || aPos.iX >= list.iBr.iX - Px(KMargin))
         {
         return -1;
         }
@@ -369,8 +371,8 @@ void CWunderlandContentTypePage::Draw(const TRect& /*aRect*/) const
     gc.SetBrushColor(KBackgroundColor());
     gc.DrawRect(list);
 
-    const TInt left = list.iTl.iX + KMargin;
-    const TInt right = list.iBr.iX - KMargin;
+    const TInt left = list.iTl.iX + Px(KMargin);
+    const TInt right = list.iBr.iX - Px(KMargin);
     const TInt listTop = list.iTl.iY - iScrollY;
     const TInt rowH = RowHeight();
     const TInt count = Count();
@@ -435,11 +437,11 @@ void CWunderlandContentTypePage::DrawRow(CWindowGc& aGc, TInt aIndex, const TRec
 
     // "»" stuck to the right, the name in the space left of it
     const TInt chevronW = font->TextWidthInPixels(KChevron);
-    const TInt chevronX = aRow.iBr.iX - KRowTextPad - chevronW;
+    const TInt chevronX = aRow.iBr.iX - Px(KRowTextPad) - chevronW;
     aGc.DrawText(KChevron, TPoint(chevronX, baseline));
 
-    const TInt textLeft = aRow.iTl.iX + KRowTextPad;
-    const TInt textWidth = chevronX - KRowTextPad - textLeft;
+    const TInt textLeft = aRow.iTl.iX + Px(KRowTextPad);
+    const TInt textWidth = chevronX - Px(KRowTextPad) - textLeft;
     if (textWidth > 0)
         {
         TBuf<KMaxDrawnText> text(iItems->MdcaPoint(aIndex).Left(KMaxDrawnText));

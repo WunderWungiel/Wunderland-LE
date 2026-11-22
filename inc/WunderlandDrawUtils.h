@@ -3,6 +3,7 @@
 
 #include <gdi.h>
 
+class CFont;
 class CWindowGc;
 
 // A screen font derived from an S60 layout font (EAknLogicalFont...): its
@@ -35,6 +36,18 @@ namespace WunderlandDraw
     {
     // Linear blend: aNum/aDen of the way from aFrom to aTo.
     TRgb Blend(const TRgb& aFrom, const TRgb& aTo, TInt aNum, TInt aDen);
+
+    // Pixel sizes are designed for a 360 px short screen side (nHD: Omnia HD,
+    // N8/808). Px() scales such a size to the current screen, e.g. 2/3 on
+    // QVGA (N95, E52); never returns 0 for a non-zero size. The screen size
+    // is cached: call UpdateScale() after a layout switch, before laying out.
+    void UpdateScale();
+    TInt Px(TInt aRefPixels);
+
+    // Font of the "Categories" / "Recommended" headings: the large title font
+    // on nHD and bigger, the small bold primary font on smaller screens
+    // (the title font is too big there).
+    const CFont* HeadingFont();
 
     // Fills aRect row by row with a vertical gradient. Leaves the pen solid, brush null.
     void FillGradient(CWindowGc& aGc, const TRect& aRect, const TRgb& aTop, const TRgb& aBottom);

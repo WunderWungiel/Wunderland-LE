@@ -10,6 +10,7 @@
 #include "WunderlandCategoryList.h"
 #include "WunderlandContainer.h"
 #include "WunderlandContentTypePage.h"
+#include "WunderlandDrawUtils.h"
 #include "WunderlandLE_0xE4F76EAD.rsg"
 #include "WunderlandSearchPage.h"
 #include "WunderlandSearchResultsPage.h"
@@ -1045,6 +1046,7 @@ void CWunderlandContainer::SizeChanged()
         {
         return;
         }
+    WunderlandDraw::UpdateScale();   // the pages' pixel sizes follow the screen
     const TRect rect(Rect());
     iTabBar->SetRect(TRect(rect.iTl, TSize(rect.Width(), iTabBar->PreferredHeight(rect.Size()))));
     iAppList->SetRect(ContentRect());

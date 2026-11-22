@@ -6,9 +6,11 @@
 #include "WunderlandDrawUtils.h"
 
 using WunderlandDraw::FillRoundGradient;
+using WunderlandDraw::Px;
 
 namespace
     {
+    // Pixel sizes for a 360 px short screen side; used through Px().
     const TInt KItemGranularity = 8;
     const TInt KMargin = 10;           // page edges to the rows and the heading
     const TInt KHeadingVPad = 8;       // above/below the heading text
@@ -144,7 +146,7 @@ TBool CWunderlandCategoryList::MoveHighlight(TInt aDelta)
 
 const CFont* CWunderlandCategoryList::HeadingFont() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontTitleFont);   // large bold
+    return WunderlandDraw::HeadingFont();
     }
 
 const CFont* CWunderlandCategoryList::RowFont() const
@@ -154,25 +156,25 @@ const CFont* CWunderlandCategoryList::RowFont() const
 
 TInt CWunderlandCategoryList::HeadingHeight() const
     {
-    return KHeadingVPad + HeadingFont()->HeightInPixels() + KHeadingVPad;
+    return Px(KHeadingVPad) + HeadingFont()->HeightInPixels() + Px(KHeadingVPad);
     }
 
 TInt CWunderlandCategoryList::RowHeight() const
     {
-    const TInt h = RowFont()->HeightInPixels() + 2 * KRowVPad;
-    return h > KMinRowHeight ? h : KMinRowHeight;
+    const TInt h = RowFont()->HeightInPixels() + 2 * Px(KRowVPad);
+    return h > Px(KMinRowHeight) ? h : Px(KMinRowHeight);
     }
 
 TInt CWunderlandCategoryList::RowTop(TInt aIndex) const
     {
-    return HeadingHeight() + aIndex * (RowHeight() + KRowGap);
+    return HeadingHeight() + aIndex * (RowHeight() + Px(KRowGap));
     }
 
 // The status line, if any, takes the place of one more row.
 TInt CWunderlandCategoryList::ContentHeight() const
     {
     const TInt rows = Count() + (iStatus ? 1 : 0);
-    return RowTop(rows) - KRowGap + KMargin;   // bottom margin after the last row
+    return RowTop(rows) - Px(KRowGap) + Px(KMargin);   // bottom margin after the last row
     }
 
 TBool CWunderlandCategoryList::HasScrollBar() const
@@ -183,7 +185,7 @@ TBool CWunderlandCategoryList::HasScrollBar() const
 TInt CWunderlandCategoryList::ItemAt(const TPoint& aPos) const
     {
     const TRect rect(Rect());
-    if (!rect.Contains(aPos) || aPos.iX < rect.iTl.iX + KMargin || aPos.iX >= rect.iBr.iX - KMargin)
+    if (!rect.Contains(aPos) || aPos.iX < rect.iTl.iX + Px(KMargin) || aPos.iX >= rect.iBr.iX - Px(KMargin))
         {
         return -1;
         }
@@ -192,7 +194,7 @@ TInt CWunderlandCategoryList::ItemAt(const TPoint& aPos) const
         {
         return -1;
         }
-    const TInt step = RowHeight() + KRowGap;
+    const TInt step = RowHeight() + Px(KRowGap);
     const TInt item = y / step;
     if (item >= Count() || y % step >= RowHeight())   // in the gap between rows
         {
@@ -236,8 +238,8 @@ void CWunderlandCategoryList::SetScroll(TInt aScrollY)
 void CWunderlandCategoryList::EnsureVisible(TInt aIndex)
     {
     // The first row brings the heading along, the last row its bottom margin
-    const TInt top = aIndex == 0 ? 0 : RowTop(aIndex) - KRowGap;
-    const TInt bottom = aIndex == Count() - 1 ? ContentHeight() : RowTop(aIndex) + RowHeight() + KRowGap;
+    const TInt top = aIndex == 0 ? 0 : RowTop(aIndex) - Px(KRowGap);
+    const TInt bottom = aIndex == Count() - 1 ? ContentHeight() : RowTop(aIndex) + RowHeight() + Px(KRowGap);
     if (top < iScrollY)
         {
         SetScroll(top);
@@ -320,8 +322,8 @@ void CWunderlandCategoryList::Draw(const TRect& /*aRect*/) const
     gc.SetBrushColor(KBackgroundColor());
     gc.DrawRect(rect);
 
-    const TInt left = rect.iTl.iX + KMargin;
-    const TInt right = rect.iBr.iX - KMargin;
+    const TInt left = rect.iTl.iX + Px(KMargin);
+    const TInt right = rect.iBr.iX - Px(KMargin);
     const TInt pageTop = rect.iTl.iY - iScrollY;
 
     // Heading, left-aligned with the rows
@@ -330,7 +332,7 @@ void CWunderlandCategoryList::Draw(const TRect& /*aRect*/) const
     gc.SetBrushStyle(CGraphicsContext::ENullBrush);
     gc.SetPenStyle(CGraphicsContext::ESolidPen);
     gc.SetPenColor(KHeadingColor());
-    gc.DrawText(KHeading, TPoint(left, pageTop + KHeadingVPad + headingFont->AscentInPixels()));
+    gc.DrawText(KHeading, TPoint(left, pageTop + Px(KHeadingVPad) + headingFont->AscentInPixels()));
     gc.DiscardFont();
 
     const TInt rowH = RowHeight();
@@ -384,11 +386,11 @@ void CWunderlandCategoryList::DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& 
 
     // "»" stuck to the right, the name in the space left of it
     const TInt chevronW = font->TextWidthInPixels(KChevron);
-    const TInt chevronX = aRow.iBr.iX - KRowTextPad - chevronW;
+    const TInt chevronX = aRow.iBr.iX - Px(KRowTextPad) - chevronW;
     aGc.DrawText(KChevron, TPoint(chevronX, baseline));
 
-    const TInt textLeft = aRow.iTl.iX + KRowTextPad;
-    const TInt textWidth = chevronX - KRowTextPad - textLeft;
+    const TInt textLeft = aRow.iTl.iX + Px(KRowTextPad);
+    const TInt textWidth = chevronX - Px(KRowTextPad) - textLeft;
     if (textWidth > 0)
         {
         TBuf<KMaxDrawnText> text(iItems->MdcaPoint(aIndex).Left(KMaxDrawnText));
