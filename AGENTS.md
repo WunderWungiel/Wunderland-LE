@@ -10,7 +10,8 @@ https://raw.githubusercontent.com/WunderWungiel/Wunderland-Store/master/docs/api
 don't guess endpoints, fields or error codes. The client is `CWunderlandApiClient` (`inc/WunderlandApiClient.h`),
 with typed views in `inc/WunderlandApiTypes.h`.
 - From the API: the content types (Categories tab), each type's categories (content type page) and the
-  search results (`GET /content?q=`, page by page).
+  search results (`GET /content?q=`, page by page) with their icons (`icon_url`, PNG, fetched
+  through `StartFileL` and decoded/scaled by `CWunderlandIconLoader`).
 - Still sample data: the Home list (`CWunderlandContainer::StartLoadL`).
 
 **Read `.claude/rules/symbian-cpp.md` and `docs/symbian-cpp-docs/AGENTS.md` before touching code.**

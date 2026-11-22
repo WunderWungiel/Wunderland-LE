@@ -103,6 +103,7 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iTooltipTimer = CPeriodic::NewL(CActive::EPriorityStandard);
     iLoadTimer = CPeriodic::NewL(CActive::EPriorityStandard);
     iApi = CWunderlandApiClient::NewL(*this);
+    iResultsIcons = CWunderlandIconLoader::NewL(iResultsPage->List(), *iApi, *this);
     EnableDragEvents();   // touch scrolling of the list
 
     iHomeFeed.iList = iAppList;
@@ -131,7 +132,8 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
 
 CWunderlandContainer::~CWunderlandContainer()
     {
-    delete iApi;   // first: cancels a request, so no callback reaches a half-deleted container
+    delete iResultsIcons;   // uses iApi and the results list
+    delete iApi;   // cancels a request, so no callback reaches a half-deleted container
     iContentTypes.ResetAndDestroy();
     if (iLoadTimer)
         {
@@ -303,6 +305,10 @@ CWunderlandContainer::TFeed* CWunderlandContainer::FeedFor(const CWunderlandAppL
 
 void CWunderlandContainer::ResetFeed(TFeed& aFeed)
     {
+    if (&aFeed == &iResultsFeed)
+        {
+        iResultsIcons->Reset();   // cancels an icon request; the rows go below
+        }
     if (iLoading == &aFeed)
         {
         if (&aFeed == &iResultsFeed)
@@ -446,6 +452,15 @@ void CWunderlandContainer::ContentPageLoadedL(TFeed& aFeed, const CWunderlandApi
             continue;   // not a content object
             }
         list.AppendL(item.Title(), item.CategoryName(), item.Rating().Rounded());
+        if (&aFeed == &iResultsFeed)
+            {
+            // Optional: without it the row keeps its placeholder
+            TRAP_IGNORE(iResultsIcons->AddL(list.Count() - 1, item.IconUrl()));
+            }
+        }
+    if (&aFeed == &iResultsFeed)
+        {
+        iResultsIcons->Resume();   // the connection works again
         }
     ++aFeed.iNextPage;
     // An empty page is past the end, whatever meta says
@@ -545,6 +560,15 @@ void CWunderlandContainer::StartNextRequest()
             }
         }
     StartNextLoad();   // a results page if the client is still idle; Home anyway
+    if (!iApi->IsBusy() && iOverlay == EOverlaySearchResults)
+        {
+        TRAP_IGNORE(iResultsIcons->StartNextL());   // last: icons wait for everything else
+        }
+    }
+
+void CWunderlandContainer::HandleIconLoaderReady()
+    {
+    StartNextRequest();   // the next icon, if the client is idle
     }
 
 void CWunderlandContainer::HandleApiResponseL(CWunderlandApiResponse& aResponse)
@@ -594,6 +618,9 @@ void CWunderlandContainer::ApiResponseL(CWunderlandApiResponse& aResponse)
                 }
             break;
             }
+        case EWunderlandApiFile:
+            iResultsIcons->HandleResponse(aResponse);
+            break;
         default:
             break;
         }

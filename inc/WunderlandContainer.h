@@ -5,6 +5,7 @@
 #include <badesca.h>
 #include "WunderlandApiClient.h"
 #include "WunderlandAppList.h"
+#include "WunderlandIconLoader.h"
 #include "WunderlandPage.h"
 #include "WunderlandSearchBar.h"
 
@@ -32,11 +33,14 @@ class MWunderlandPage;
 // the store API: the types once at start-up, a type's categories when its
 // page opens (kept for an hour, as the API allows). A failed load shows a
 // retry line: Down or a tap retries.
+// The search results' icons (icon_url) load after everything else, one at a
+// time, while the results page is open (CWunderlandIconLoader).
 class CWunderlandContainer : public CCoeControl, public MCoeControlObserver,
                              public MWunderlandSearchObserver,
                              public MWunderlandAppListLoader,
                              public MWunderlandApiObserver,
-                             public MWunderlandRetryObserver
+                             public MWunderlandRetryObserver,
+                             public MWunderlandIconLoaderObserver
     {
 public:
     static CWunderlandContainer* NewL(const TRect& aRect);
@@ -62,6 +66,8 @@ private: // from MWunderlandApiObserver
     void HandleApiResponseL(CWunderlandApiResponse& aResponse);
 private: // from MWunderlandRetryObserver
     void HandleRetryL(CCoeControl& aPage);
+private: // from MWunderlandIconLoaderObserver
+    void HandleIconLoaderReady();
 private:
     CWunderlandContainer();
     void ConstructL(const TRect& aRect);
@@ -174,6 +180,7 @@ private:
         };
 
     CWunderlandApiClient* iApi;      // owned
+    CWunderlandIconLoader* iResultsIcons;   // owned; icons of the search results
     RPointerArray<CContentType> iContentTypes;   // owned; in the server's order
     TBool iContentTypesFailed;       // the Categories tab shows the retry line
     TBool iContentTypesWanted;       // to start once the client is idle

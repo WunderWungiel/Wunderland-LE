@@ -24,8 +24,8 @@ public:
 
 // Scrollable list of store entries in the Ovi Store style: on a very light
 // grey background, an optional title ("Recommended"), then a white box with
-// a margin around it holding the rows. Each row: square (placeholder) icon
-// on the left, then the bold app name, the grey subtitle (the category) and
+// a margin around it holding the rows. Each row: square icon (a coloured
+// placeholder with the first letter until SetIcon() gives one) on the left, then the bold app name, the grey subtitle (the category) and
 // a small 1-5 star rating under each other. Rows are split by thin lines;
 // the highlighted row turns dark grey. The title and the box scroll with
 // the rows.
@@ -48,6 +48,12 @@ public:
     // aSubtitle may be empty: the name and the stars are then centred alone.
     // aRating is clamped to 0..5.
     void AppendL(const TDesC& aName, const TDesC& aSubtitle, TInt aRating);
+    // Gives row aIndex its icon; takes ownership of both (aMask may be NULL,
+    // e.g. an EGray256 alpha mask of the same size). Best drawn at
+    // IconSize(); other sizes are stretched. An out-of-range index deletes them.
+    void SetIcon(TInt aIndex, CFbsBitmap* aBitmap, CFbsBitmap* aMask);
+    TSize IconSize() const;        // of the icon square in a row; follows the layout
+    TInt FirstVisible() const;     // first row at least partly on screen; 0 if empty
     // Shown above the box; empty (the default): no title.
     void SetTitle(const TDesC& aTitle);
 
@@ -110,7 +116,7 @@ private:
     void DoLoadMore();
 
     void DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& aRow) const;
-    void DrawIcon(CWindowGc& aGc, const TItem& aItem, const TRect& aRect) const;
+    void DrawIcon(CWindowGc& aGc, TInt aIndex, const TRect& aRect) const;
     TInt StarsWidth() const;
     TInt StarsHeight() const;
     void DrawStars(CWindowGc& aGc, TInt aRating, const TPoint& aTopLeft) const;
@@ -126,6 +132,9 @@ private:
     RWunderlandFont iNameFont;      // primary, bold
     RWunderlandFont iSubtitleFont;  // secondary, scaled down
     RArray<TItem> iItems;
+    // Parallel to iItems; NULL until SetIcon()
+    RPointerArray<CFbsBitmap> iIcons;       // owned
+    RPointerArray<CFbsBitmap> iIconMasks;   // owned
     TBuf<40> iTitle;
     TInt iHighlighted;
     TInt iScrollY;          // pixels scrolled from the top of the first row

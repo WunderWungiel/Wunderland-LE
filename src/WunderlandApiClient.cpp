@@ -10,6 +10,7 @@ namespace
     _LIT8(KUserAgent, "WunderlandLE/1.0 (SymbianOS/9; S60)");
     _LIT8(KAcceptJson, "application/json");
     _LIT8(KContentTypeJson, "application/json");   // UTF-8 is JSON's default
+    _LIT8(KAcceptAny, "*/*");
 
     // Paths
     _LIT8(KPathRoot, "/");
@@ -74,6 +75,7 @@ namespace
     const TInt KInitialBodySize = 4096;
     const TInt KShrinkBodyAbove = 64 * 1024;     // keep a big buffer only while needed
     const TInt KMaxResponseSize = 1024 * 1024;   // a full 50-item page is ~60 KB
+    const TInt KMaxFileSize = 256 * 1024;        // icons are a few KB
     const TInt KMaxIds = 50;
     const TInt KMaxInstalled = 100;
     const TInt KMaxVersionLength = 64;
@@ -151,6 +153,19 @@ CWunderlandApiResponse::CWunderlandApiResponse(TWunderlandApiRequest aRequest)
 CWunderlandApiResponse::~CWunderlandApiResponse()
     {
     delete iRoot;
+    delete iBody;
+    }
+
+const TDesC8& CWunderlandApiResponse::Body() const
+    {
+    return iBody ? static_cast<const TDesC8&>(*iBody) : KNullDesC8();
+    }
+
+HBufC8* CWunderlandApiResponse::TakeBody()
+    {
+    HBufC8* body = iBody;
+    iBody = NULL;
+    return body;
     }
 
 TWunderlandApiRequest CWunderlandApiResponse::Request() const
@@ -497,6 +512,11 @@ void CWunderlandApiClient::StartUpdatesL(const TDesC& aPlatform,
     SendL();
     }
 
+void CWunderlandApiClient::StartFileL(const TDesC& aUrl)
+    {
+    StartUrlL(aUrl, EWunderlandApiFile);
+    }
+
 void CWunderlandApiClient::StartUrlL(const TDesC& aUrl, TWunderlandApiRequest aRequest)
     {
     if (IsBusy())
@@ -509,6 +529,7 @@ void CWunderlandApiClient::StartUrlL(const TDesC& aUrl, TWunderlandApiRequest aR
         }
     PrepareResponseL(aRequest);
     iPost = EFalse;
+    iFile = (aRequest == EWunderlandApiFile);
     iUrl.Zero();
     iRequestBody.Zero();
     // The API's URLs are ASCII; UTF-8 keeps anything else intact.
@@ -537,6 +558,7 @@ void CWunderlandApiClient::BeginRequestL(TWunderlandApiRequest aRequest, const T
         }
     PrepareResponseL(aRequest);
     iPost = EFalse;
+    iFile = EFalse;
     iUrl.Zero();
     iRequestBody.Zero();
     AppendL(*iBaseUrl);
@@ -663,7 +685,7 @@ void CWunderlandApiClient::SubmitL()
 
     RHTTPHeaders headers = iTransaction.Request().GetHeaderCollection();
     SetHeaderL(headers, HTTP::EUserAgent, KUserAgent);
-    SetHeaderL(headers, HTTP::EAccept, KAcceptJson);
+    SetHeaderL(headers, HTTP::EAccept, iFile ? KAcceptAny() : KAcceptJson());
     if (iPost)
         {
         SetHeaderL(headers, HTTP::EContentType, KContentTypeJson);
@@ -823,7 +845,16 @@ void CWunderlandApiClient::NotifyObserver()
     response->iHttpStatus = iHttpStatus;
 
     TInt error = iError;
-    if (iHttpStatus > 0 && iResponseBody.Length() > 0)
+    const TBool success = (iHttpStatus >= 200 && iHttpStatus < 300);
+    if (iFile && success && error == KErrNone)
+        {
+        response->iBody = iResponseBody.Alloc();   // NULL on failure
+        if (!response->iBody)
+            {
+            error = KErrNoMemory;
+            }
+        }
+    else if (iHttpStatus > 0 && iResponseBody.Length() > 0)
         {
         // Error bodies are parsed too, for ErrorCode(). A body that isn't
         // JSON (a proxy page) leaves iRoot NULL.
@@ -835,9 +866,9 @@ void CWunderlandApiClient::NotifyObserver()
         }
     if (error == KErrNone)
         {
-        if (iHttpStatus >= 200 && iHttpStatus < 300)
+        if (success)
             {
-            if (!response->iRoot || !response->iRoot->Member(KKeyData))
+            if (!iFile && (!response->iRoot || !response->iRoot->Member(KKeyData)))
                 {
                 error = KErrCorrupt;
                 }
@@ -891,7 +922,7 @@ void CWunderlandApiClient::MHFRunL(RHTTPTransaction aTransaction, const THTTPEve
             TPtrC8 part;
             body->GetNextDataPart(part);
             TInt err = KErrNone;
-            if (iResponseBody.Length() + part.Length() > KMaxResponseSize)
+            if (iResponseBody.Length() + part.Length() > (iFile ? KMaxFileSize : KMaxResponseSize))
                 {
                 err = KErrOverflow;
                 }

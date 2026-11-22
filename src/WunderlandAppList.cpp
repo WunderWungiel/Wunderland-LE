@@ -134,11 +134,15 @@ CWunderlandAppList::~CWunderlandAppList()
     iNameFont.Close();
     iSubtitleFont.Close();
     iItems.Close();
+    iIcons.ResetAndDestroy();
+    iIconMasks.ResetAndDestroy();
     }
 
 void CWunderlandAppList::Reset()
     {
     iItems.Reset();
+    iIcons.ResetAndDestroy();
+    iIconMasks.ResetAndDestroy();
     iHighlighted = -1;
     iScrollY = 0;
     iDragged = EFalse;
@@ -153,8 +157,40 @@ void CWunderlandAppList::AppendL(const TDesC& aName, const TDesC& aSubtitle, TIn
     item.iName = aName.Left(item.iName.MaxLength());
     item.iSubtitle = aSubtitle.Left(item.iSubtitle.MaxLength());
     item.iRating = aRating < 0 ? 0 : (aRating > KMaxStars ? KMaxStars : aRating);
+    // Room in all three arrays first, so they stay the same length
+    iIcons.ReserveL(iItems.Count() + 1);
+    iIconMasks.ReserveL(iItems.Count() + 1);
     iItems.AppendL(item);
+    iIcons.Append(NULL);       // can't fail after ReserveL
+    iIconMasks.Append(NULL);
     DrawDeferred();
+    }
+
+void CWunderlandAppList::SetIcon(TInt aIndex, CFbsBitmap* aBitmap, CFbsBitmap* aMask)
+    {
+    if (aIndex < 0 || aIndex >= iIcons.Count() || !aBitmap)
+        {
+        delete aBitmap;
+        delete aMask;
+        return;
+        }
+    delete iIcons[aIndex];
+    iIcons[aIndex] = aBitmap;
+    delete iIconMasks[aIndex];
+    iIconMasks[aIndex] = aMask;
+    DrawDeferred();
+    }
+
+TSize CWunderlandAppList::IconSize() const
+    {
+    const TInt size = RowHeight() - 2 * KIconPad;
+    return TSize(size, size);
+    }
+
+TInt CWunderlandAppList::FirstVisible() const
+    {
+    const TInt first = (iScrollY - RowsTop()) / RowHeight();
+    return first > 0 ? first : 0;
     }
 
 void CWunderlandAppList::SetTitle(const TDesC& aTitle)
@@ -604,7 +640,7 @@ void CWunderlandAppList::DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& aRow)
     const TInt iconSize = aRow.Height() - 2 * KIconPad;
     const TRect iconRect(TPoint(aRow.iTl.iX + KIconPad, aRow.iTl.iY + KIconPad),
                          TSize(iconSize, iconSize));
-    DrawIcon(aGc, item, iconRect);
+    DrawIcon(aGc, aIndex, iconRect);
 
     // Name, subtitle and stars under each other, centred vertically as a block
     const TInt textLeft = iconRect.iBr.iX + KTextHPad;
@@ -652,10 +688,38 @@ void CWunderlandAppList::DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& aRow)
         }
     }
 
-void CWunderlandAppList::DrawIcon(CWindowGc& aGc, const TItem& aItem, const TRect& aRect) const
+void CWunderlandAppList::DrawIcon(CWindowGc& aGc, TInt aIndex, const TRect& aRect) const
     {
-    // Placeholder until the store serves icons: a square in a colour derived
-    // from the name, with the name's first letter.
+    const CFbsBitmap* icon = iIcons[aIndex];
+    if (icon)
+        {
+        const CFbsBitmap* mask = iIconMasks[aIndex];
+        const TRect source(icon->SizeInPixels());
+        if (source.Size() == aRect.Size())
+            {
+            if (mask)
+                {
+                aGc.BitBltMasked(aRect.iTl, icon, source, mask, EFalse);
+                }
+            else
+                {
+                aGc.BitBlt(aRect.iTl, icon, source);
+                }
+            }
+        else if (mask)   // made before a layout switch: stretched until reloaded
+            {
+            aGc.DrawBitmapMasked(aRect, icon, source, mask, EFalse);
+            }
+        else
+            {
+            aGc.DrawBitmap(aRect, icon, source);
+            }
+        return;
+        }
+
+    // Placeholder until the icon arrives (or if it can't be loaded): a
+    // square in a colour derived from the name, with its first letter.
+    const TItem& aItem = iItems[aIndex];
     aGc.SetPenStyle(CGraphicsContext::ENullPen);
     aGc.SetBrushStyle(CGraphicsContext::ESolidBrush);
     aGc.SetBrushColor(IconColor(aItem.iName));

@@ -27,7 +27,8 @@ enum TWunderlandApiRequest
     EWunderlandApiClients,        // GET /clients
     EWunderlandApiLegacy,         // GET /legacy/{prefix}/{old_id}
     EWunderlandApiUpdates,        // POST /updates
-    EWunderlandApiUrl             // GET of a URL taken from a response (links.self, ...)
+    EWunderlandApiUrl,            // GET of a URL taken from a response (links.self, ...)
+    EWunderlandApiFile            // GET of a non-JSON file (icon_url, ...): raw body
     };
 
 // Filters, sorting and paging for GET /content. Empty strings and 0 mean
@@ -62,7 +63,8 @@ public:
 
     TWunderlandApiRequest Request() const;
 
-    // KErrNone: a 2xx response with a JSON body; Data() is set.
+    // KErrNone: a 2xx response with a JSON body; Data() is set. For
+    // EWunderlandApiFile: a 2xx response; Body() holds it.
     // Otherwise a Symbian error code:
     //   transport errors as reported by the HTTP stack (no network,
     //   DNS failure, KErrCancel, ...), KErrCorrupt for a body that isn't
@@ -91,6 +93,11 @@ public:
     // made from it then belong to the caller's copy. NULL if there is none.
     CWunderlandJsonValue* TakeRoot();
 
+    // EWunderlandApiFile: the raw body of a 2xx response, else KNullDesC8.
+    const TDesC8& Body() const;
+    // Takes the body (NULL if there is none); Body() is then empty.
+    HBufC8* TakeBody();
+
 private:
     friend class CWunderlandApiClient;
     CWunderlandApiResponse(TWunderlandApiRequest aRequest);
@@ -99,6 +106,7 @@ private:
     TInt iError;
     TInt iHttpStatus;
     CWunderlandJsonValue* iRoot;   // owned
+    HBufC8* iBody;                 // owned; EWunderlandApiFile only
     };
 
 class MWunderlandApiObserver
@@ -158,6 +166,10 @@ public:
     // GET any absolute API URL from a response (links.self, links.related,
     // ...). aRequest is passed back in the response.
     void StartUrlL(const TDesC& aUrl, TWunderlandApiRequest aRequest = EWunderlandApiUrl);
+    // GET a file (an icon_url, ...) as raw bytes, up to 256 KB (else
+    // KErrOverflow). Answered as EWunderlandApiFile with Body(); error
+    // statuses are mapped as for JSON requests.
+    void StartFileL(const TDesC& aUrl);
 
 private: // from CActive
     void RunL();
@@ -223,6 +235,7 @@ private:
     RBuf8 iRequestBody;             // POST body, empty for GET
     RBuf8 iResponseBody;
     TBool iPost;
+    TBool iFile;                    // EWunderlandApiFile: keep the body raw
     // Made when a request starts, so reporting it later can't run out of
     // memory and lose the callback.
     CWunderlandApiResponse* iResponse;   // owned

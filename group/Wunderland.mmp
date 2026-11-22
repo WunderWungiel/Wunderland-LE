@@ -29,6 +29,7 @@ SOURCE            WunderlandDrawUtils.cpp
 SOURCE            WunderlandJson.cpp
 SOURCE            WunderlandApiTypes.cpp
 SOURCE            WunderlandApiClient.cpp
+SOURCE            WunderlandIconLoader.cpp
 
 SOURCEPATH        ..\data
 START RESOURCE    WunderlandLE_0xE4F76EAD.rss      // main resource: must come before _reg.rss
@@ -57,3 +58,4 @@ LIBRARY           euser.lib apparc.lib cone.lib eikcore.lib avkon.lib
 LIBRARY           eikcoctl.lib gdi.lib ws32.lib bafl.lib fbscli.lib aknicon.lib
 LIBRARY           etext.lib egul.lib // search field: CCharFormatLayer, TMargins8
 LIBRARY           http.lib inetprotutil.lib esock.lib ecom.lib charconv.lib // store API client
+LIBRARY           imageconversion.lib // PNG icons from the store
