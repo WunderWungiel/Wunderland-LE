@@ -123,7 +123,6 @@ void WunderlandDraw::FillRoundGradient(CWindowGc& aGc, const TRect& aRect, const
 
 namespace
     {
-    const TInt KHeaderVPad = 8;        // above/below the title
     const TInt KHeaderTextInset = 24;  // lines up with the row text of the pages below
     const TInt KMaxTitle = 64;
 
@@ -136,11 +135,19 @@ namespace
         {
         return AknLayoutUtils::FontFromId(EAknLogicalFontPrimaryFont);
         }
+
+    // Above/below the title. Grows with the font so the bar keeps the same
+    // proportions on every layout (about 2.5x the text height).
+    TInt HeaderVPad(const CFont& aFont)
+        {
+        return 10 + aFont.HeightInPixels() / 3;
+        }
     }
 
 TInt WunderlandDraw::PageHeaderHeight()
     {
-    return KHeaderVPad + HeaderFont()->HeightInPixels() + KHeaderVPad;
+    const CFont* font = HeaderFont();
+    return 2 * HeaderVPad(*font) + font->HeightInPixels();
     }
 
 void WunderlandDraw::DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TDesC& aTitle)
@@ -163,7 +170,7 @@ void WunderlandDraw::DrawPageHeader(CWindowGc& aGc, const TRect& aRect, const TD
     aGc.SetPenStyle(CGraphicsContext::ESolidPen);
     aGc.SetPenColor(KHeaderTextColor());
     aGc.DrawText(text, TPoint(aRect.iTl.iX + KHeaderTextInset,
-                              aRect.iTl.iY + KHeaderVPad + font->AscentInPixels()));
+                              aRect.iTl.iY + HeaderVPad(*font) + font->AscentInPixels()));
     aGc.DiscardFont();
     }
 

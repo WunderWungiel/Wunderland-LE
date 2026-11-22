@@ -12,17 +12,18 @@ using WunderlandDraw::FillGradient;
 namespace
     {
     const TInt KItemGranularity = 16;
-    const TInt KMinRowHeight = 52;     // rows double as touch targets
+    const TInt KMinRowHeight = 60;     // rows double as touch targets
     const TInt KMargin = 10;           // around the box; the scroll bar sits in the right one
     const TInt KTitleGap = 6;          // between the title and the box
     const TInt KBorder = 1;            // the box's outline
     const TInt KIconPad = 8;           // around the icon inside its row
-    const TInt KRowVPad = 6;           // space above/below the text block
+    const TInt KRowVPad = 10;          // space above/below the text block
     const TInt KLineGap = 2;           // between the name and the subtitle
     const TInt KStarsGap = 3;          // between the subtitle and the stars
     const TInt KTextHPad = 10;         // left of the text (after the icon) and right of it
     const TInt KStarGap = 1;
-    const TInt KSubtitlePercent = 85;  // of the secondary font's height
+    const TInt KSubtitlePercent = 78;  // of the secondary font's height
+    const TInt KNamePercent = 90;      // of the primary font's height
     const TInt KMaxStars = 5;
     const TInt KScrollBarWidth = 4;
     const TInt KMinThumbHeight = 8;
@@ -116,7 +117,7 @@ void CWunderlandAppList::ConstructL(const CCoeControl& aParent)
 void CWunderlandAppList::UpdateFonts()
     {
     // Errors leave the previous (or the plain layout) font in use.
-    iNameFont.Update(EAknLogicalFontPrimaryFont, 100, ETrue);
+    iNameFont.Update(EAknLogicalFontPrimaryFont, KNamePercent, ETrue);
     iSubtitleFont.Update(EAknLogicalFontSecondaryFont, KSubtitlePercent, EFalse);
     }
 
