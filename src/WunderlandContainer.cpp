@@ -85,6 +85,8 @@ void CWunderlandContainer::ConstructL(const TRect& aRect)
     iTabBar->SetObserver(this);
     iAppList = CWunderlandAppList::NewL(*this);
     iAppList->SetObserver(this);
+    _LIT(KHomeTitle, "Recommended");
+    iAppList->SetTitle(KHomeTitle);
     iCategoryList = CWunderlandCategoryList::NewL(*this);
     iCategoryList->SetObserver(this);
     iCategoryList->SetRetryObserver(this);

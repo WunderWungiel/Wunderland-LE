@@ -21,11 +21,13 @@ public:
     virtual void HandleLoadMoreL(CWunderlandAppList& aList) = 0;
     };
 
-// Scrollable list of store entries in the Ovi Store style. Every row is as
-// tall as its square (placeholder) icon: icon on the left, bold app name
-// with an optional grey subtitle (the category) next to it, a 1-5 star
-// rating stuck to the right. Rows alternate #E8E8E8 / white; the highlighted
-// row turns dark grey.
+// Scrollable list of store entries in the Ovi Store style: on a very light
+// grey background, an optional title ("Recommended"), then a white box with
+// a margin around it holding the rows. Each row: square (placeholder) icon
+// on the left, then the bold app name, the grey subtitle (the category) and
+// a small 1-5 star rating under each other. Rows are split by thin lines;
+// the highlighted row turns dark grey. The title and the box scroll with
+// the rows.
 // Non-window-owning. Keys are fed by the parent (MoveHighlight); pointer
 // events arrive through the parent. Reports EEventStateChanged to its
 // observer when a tap highlights a row.
@@ -42,9 +44,11 @@ public:
     // Removes all rows, highlight and scroll; no more rows are expected
     // until SetMoreAvailable(ETrue).
     void Reset();
-    // aSubtitle may be empty: the name is then centred on its own.
+    // aSubtitle may be empty: the name and the stars are then centred alone.
     // aRating is clamped to 0..5.
     void AppendL(const TDesC& aName, const TDesC& aSubtitle, TInt aRating);
+    // Shown above the box; empty (the default): no title.
+    void SetTitle(const TDesC& aTitle);
 
     void SetLoader(MWunderlandAppListLoader* aLoader);   // not owned; NULL: none
     // After each page (and once to start an empty list): whether the loader
@@ -82,9 +86,15 @@ private:
 
     const CFont* NameFont() const;
     const CFont* SubtitleFont() const;
+    const CFont* TitleFont() const;
     TInt RowHeight() const;
+    // Content coordinates (0 = top of the content, unscrolled)
+    TInt RowsTop() const;         // top of the first row
+    TInt BoxRows() const;         // RowCount(), or 1 for the "No items" row
+    TRect RowRect(TInt aRow) const;   // control coordinates, scrolled
     TInt RowCount() const;        // Count() plus the loading row, if shown
-    TInt ContentHeight() const;
+    TInt ContentHeight() const;   // margins, title, box and rows
+    TInt RowAt(const TPoint& aPos) const;     // -1 if none; Count() = loading row
     TBool HasScrollBar() const;
     TInt ItemAt(const TPoint& aPos) const;   // -1 if none
     void SetScroll(TInt aScrollY);            // clamps
@@ -100,8 +110,9 @@ private:
     void DrawRow(CWindowGc& aGc, TInt aIndex, const TRect& aRow) const;
     void DrawIcon(CWindowGc& aGc, const TItem& aItem, const TRect& aRect) const;
     TInt StarsWidth() const;
-    void DrawStars(CWindowGc& aGc, TInt aRating, const TRect& aRow, TInt aRight) const;
-    void DrawLoadingRow(CWindowGc& aGc, const TRect& aRow) const;
+    TInt StarsHeight() const;
+    void DrawStars(CWindowGc& aGc, TInt aRating, const TPoint& aTopLeft) const;
+    void DrawRowBackground(CWindowGc& aGc, TInt aRow, const TRect& aRect, TBool aHighlighted) const;
     void DrawScrollBar(CWindowGc& aGc) const;
 
 private:
@@ -111,6 +122,7 @@ private:
     CFbsBitmap* iStarOff;       // owned
     CFbsBitmap* iStarOffMask;   // owned
     RArray<TItem> iItems;
+    TBuf<40> iTitle;
     TInt iHighlighted;
     TInt iScrollY;          // pixels scrolled from the top of the first row
     // touch tracking

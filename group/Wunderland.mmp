@@ -39,7 +39,7 @@ START BITMAP      WunderlandLE_0xE4F76EAD_stars.mbm   // rating stars from the w
 HEADER
 TARGETPATH        \resource\apps
 SOURCEPATH        ..\gfx
-SOURCE            c24,8 star_p.bmp star_p_mask.bmp star_g.bmp star_g_mask.bmp
+SOURCE            c24,8 star_p_s.bmp star_p_s_mask.bmp star_g_s.bmp star_g_s_mask.bmp   // made by gen_small_stars.py
 END
 SOURCEPATH        ..\data
 START RESOURCE    WunderlandLE_0xE4F76EAD_reg.rss
