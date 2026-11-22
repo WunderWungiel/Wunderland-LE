@@ -13,15 +13,16 @@ namespace
     {
     const TInt KItemGranularity = 16;
     const TInt KMinRowHeight = 52;     // rows double as touch targets
-    const TInt KMargin = 6;            // around the box; the scroll bar sits in the right one
-    const TInt KTitleGap = 4;          // between the title and the box
+    const TInt KMargin = 10;           // around the box; the scroll bar sits in the right one
+    const TInt KTitleGap = 6;          // between the title and the box
     const TInt KBorder = 1;            // the box's outline
-    const TInt KIconPad = 4;           // around the icon inside its row
+    const TInt KIconPad = 8;           // around the icon inside its row
     const TInt KRowVPad = 6;           // space above/below the text block
     const TInt KLineGap = 2;           // between the name and the subtitle
     const TInt KStarsGap = 3;          // between the subtitle and the stars
-    const TInt KTextHPad = 8;          // left of the text (after the icon) and right of it
+    const TInt KTextHPad = 10;         // left of the text (after the icon) and right of it
     const TInt KStarGap = 1;
+    const TInt KSubtitlePercent = 85;  // of the secondary font's height
     const TInt KMaxStars = 5;
     const TInt KScrollBarWidth = 4;
     const TInt KMinThumbHeight = 8;
@@ -109,6 +110,14 @@ void CWunderlandAppList::ConstructL(const CCoeControl& aParent)
     iStarOnMask  = LoadBitmapL(file, EMbmWunderlandle_0xe4f76ead_starsStar_p_s_mask);
     iStarOff     = LoadBitmapL(file, EMbmWunderlandle_0xe4f76ead_starsStar_g_s);
     iStarOffMask = LoadBitmapL(file, EMbmWunderlandle_0xe4f76ead_starsStar_g_s_mask);
+    UpdateFonts();
+    }
+
+void CWunderlandAppList::UpdateFonts()
+    {
+    // Errors leave the previous (or the plain layout) font in use.
+    iNameFont.Update(EAknLogicalFontPrimaryFont, 100, ETrue);
+    iSubtitleFont.Update(EAknLogicalFontSecondaryFont, KSubtitlePercent, EFalse);
     }
 
 CWunderlandAppList::~CWunderlandAppList()
@@ -122,6 +131,8 @@ CWunderlandAppList::~CWunderlandAppList()
     delete iStarOnMask;
     delete iStarOff;
     delete iStarOffMask;
+    iNameFont.Close();
+    iSubtitleFont.Close();
     iItems.Close();
     }
 
@@ -289,17 +300,17 @@ TBool CWunderlandAppList::MoveHighlight(TInt aDelta)
 
 const CFont* CWunderlandAppList::NameFont() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontPrimarySmallFont);   // small bold
+    return iNameFont.Font();
     }
 
 const CFont* CWunderlandAppList::SubtitleFont() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontSecondaryFont);
+    return iSubtitleFont.Font();
     }
 
 const CFont* CWunderlandAppList::TitleFont() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontPrimaryFont);
+    return AknLayoutUtils::FontFromId(EAknLogicalFontTitleFont);   // large bold
     }
 
 TInt CWunderlandAppList::RowHeight() const
@@ -429,6 +440,7 @@ void CWunderlandAppList::EnsureVisible(TInt aIndex)
 
 void CWunderlandAppList::SizeChanged()
     {
+    UpdateFonts();         // the layout fonts follow the screen layout
     SetScroll(iScrollY);   // re-clamp after rotation / layout change
     if (iHighlighted >= 0)
         {

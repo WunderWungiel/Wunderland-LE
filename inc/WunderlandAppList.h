@@ -3,6 +3,7 @@
 
 #include <coecntrl.h>
 #include "WunderlandPage.h"
+#include "WunderlandDrawUtils.h"
 
 class CFont;
 class CFbsBitmap;
@@ -84,6 +85,7 @@ private:
     CWunderlandAppList();
     void ConstructL(const CCoeControl& aParent);
 
+    void UpdateFonts();   // after a layout switch; keeps the old fonts on failure
     const CFont* NameFont() const;
     const CFont* SubtitleFont() const;
     const CFont* TitleFont() const;
@@ -121,6 +123,8 @@ private:
     CFbsBitmap* iStarOnMask;    // owned
     CFbsBitmap* iStarOff;       // owned
     CFbsBitmap* iStarOffMask;   // owned
+    RWunderlandFont iNameFont;      // primary, bold
+    RWunderlandFont iSubtitleFont;  // secondary, scaled down
     RArray<TItem> iItems;
     TBuf<40> iTitle;
     TInt iHighlighted;

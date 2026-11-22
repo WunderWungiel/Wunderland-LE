@@ -10,11 +10,11 @@ using WunderlandDraw::FillRoundGradient;
 namespace
     {
     const TInt KItemGranularity = 16;
-    const TInt KMargin = 6;            // page edges to the rows, header text inset
-    const TInt KGroupGap = 10;         // above and below "See all"
-    const TInt KRowVPad = 14;          // above/below the row text: thick rows
-    const TInt KMinRowHeight = 44;     // rows double as touch targets
-    const TInt KRowTextPad = 10;       // name and "»" inset inside the row
+    const TInt KMargin = 10;           // page edges to the rows, header text inset
+    const TInt KGroupGap = 14;         // above and below "See all"
+    const TInt KRowVPad = 22;          // above/below the row text: thick rows
+    const TInt KMinRowHeight = 60;     // rows double as touch targets
+    const TInt KRowTextPad = 14;       // name and "»" inset inside the row
     const TInt KCornerRadius = 4;      // the "See all" box; the block is square
     const TInt KScrollBarWidth = 4;    // drawn inside the right margin
     const TInt KMinThumbHeight = 8;

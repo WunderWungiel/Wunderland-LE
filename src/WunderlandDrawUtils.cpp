@@ -1,6 +1,57 @@
 #include <aknutils.h>
+#include <avkon.hrh>
+#include <coemain.h>
 #include <w32std.h>
 #include "WunderlandDrawUtils.h"
+
+RWunderlandFont::RWunderlandFont()
+    : iFont(NULL), iBaseFontId(EAknLogicalFontPrimaryFont), iPercent(100), iBold(EFalse)
+    {
+    }
+
+TInt RWunderlandFont::Update(TInt aBaseFontId, TInt aPercent, TBool aBold)
+    {
+    const TFontSpec base(AknLayoutUtils::FontFromId(aBaseFontId)->FontSpecInTwips());
+    if (iFont && aBaseFontId == iBaseFontId && aPercent == iPercent && aBold == iBold
+        && base == iBaseSpec)
+        {
+        return KErrNone;   // nothing changed
+        }
+    TFontSpec spec(base);
+    spec.iHeight = base.iHeight * aPercent / 100;
+    if (aBold)
+        {
+        spec.iFontStyle.SetStrokeWeight(EStrokeWeightBold);
+        }
+    CWsScreenDevice* device = CCoeEnv::Static()->ScreenDevice();
+    CFont* font = NULL;
+    const TInt err = device->GetNearestFontInTwips(font, spec);
+    if (err != KErrNone)
+        {
+        return err;
+        }
+    Close();
+    iFont = font;
+    iBaseSpec = base;
+    iBaseFontId = aBaseFontId;
+    iPercent = aPercent;
+    iBold = aBold;
+    return KErrNone;
+    }
+
+void RWunderlandFont::Close()
+    {
+    if (iFont)
+        {
+        CCoeEnv::Static()->ScreenDevice()->ReleaseFont(iFont);
+        iFont = NULL;
+        }
+    }
+
+const CFont* RWunderlandFont::Font() const
+    {
+    return iFont ? iFont : AknLayoutUtils::FontFromId(iBaseFontId);
+    }
 
 TRgb WunderlandDraw::Blend(const TRgb& aFrom, const TRgb& aTo, TInt aNum, TInt aDen)
     {
@@ -73,7 +124,7 @@ void WunderlandDraw::FillRoundGradient(CWindowGc& aGc, const TRect& aRect, const
 namespace
     {
     const TInt KHeaderVPad = 8;        // above/below the title
-    const TInt KHeaderTextInset = 16;  // lines up with the row text of the pages below
+    const TInt KHeaderTextInset = 24;  // lines up with the row text of the pages below
     const TInt KMaxTitle = 64;
 
     const TRgb KHeaderTopColor()     { return TRgb(0xF2, 0xF3, 0xF4); }

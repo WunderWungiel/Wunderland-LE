@@ -10,12 +10,12 @@ using WunderlandDraw::FillRoundGradient;
 namespace
     {
     const TInt KItemGranularity = 8;
-    const TInt KMargin = 6;            // page edges to the rows and the heading
-    const TInt KHeadingVPad = 6;       // above/below the heading text
-    const TInt KRowGap = 4;            // between rows
-    const TInt KRowVPad = 14;          // above/below the row text: thick rows
-    const TInt KMinRowHeight = 44;     // rows double as touch targets
-    const TInt KRowTextPad = 10;       // name and "»" inset inside the row
+    const TInt KMargin = 10;           // page edges to the rows and the heading
+    const TInt KHeadingVPad = 8;       // above/below the heading text
+    const TInt KRowGap = 8;            // between rows
+    const TInt KRowVPad = 22;          // above/below the row text: thick rows
+    const TInt KMinRowHeight = 60;     // rows double as touch targets
+    const TInt KRowTextPad = 14;       // name and "»" inset inside the row
     const TInt KCornerRadius = 4;
     const TInt KScrollBarWidth = 4;    // drawn inside the right margin
     const TInt KMinThumbHeight = 8;
@@ -144,7 +144,7 @@ TBool CWunderlandCategoryList::MoveHighlight(TInt aDelta)
 
 const CFont* CWunderlandCategoryList::HeadingFont() const
     {
-    return AknLayoutUtils::FontFromId(EAknLogicalFontPrimarySmallFont);   // small bold
+    return AknLayoutUtils::FontFromId(EAknLogicalFontTitleFont);   // large bold
     }
 
 const CFont* CWunderlandCategoryList::RowFont() const
